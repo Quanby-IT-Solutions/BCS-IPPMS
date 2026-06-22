@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -46,7 +47,11 @@ import {
 } from "@/core/components/ui/sidebar"
 import { cn } from "@/core/lib/utils"
 import { useSignOutMutation } from "@/features/auth/api/session.hooks"
-import { getAccessibleNavItems } from "@/features/dashboard/lib/nav-items"
+import {
+	getAccessibleNavGroups,
+	isSectionDefaultOpen,
+	type DashboardNavGroup,
+} from "@/features/dashboard/lib/nav-items"
 
 interface SidebarUser {
 	name: string | null
@@ -92,10 +97,7 @@ export function AppSidebar({ user, access }: AppSidebarProps) {
 	const router = useRouter()
 	const { isMobile, setOpenMobile } = useSidebar()
 	const signOut = useSignOutMutation()
-	const items = getAccessibleNavItems(access)
-	const mainItems = items.filter(item => !item.section)
-	const adminItems = items.filter(item => item.section === "Administration")
-	const isAdminActive = adminItems.some(item => isActivePath(pathname, item.href))
+	const groups = getAccessibleNavGroups(access)
 	const displayName = user.name?.trim() || "Account"
 	const closeMobileSidebarOnSelect = useCallback(() => {
 		if (isMobile) {
@@ -104,19 +106,30 @@ export function AppSidebar({ user, access }: AppSidebarProps) {
 	}, [isMobile, setOpenMobile])
 
 	return (
-		<Sidebar collapsible="icon">
-			<SidebarHeader>
-				<div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-					<div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-semibold">
-						D
+		<Sidebar collapsible="icon" className="border-border/60 border-r">
+			<SidebarHeader className="bg-background/40">
+				<div className="flex items-center gap-2 px-1 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+					<div className="bg-primary/5 dark:bg-primary/10 dark:border-zinc-805/55 flex size-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200/50 shadow-xs">
+						<Image
+							src="/logo/bcs.png"
+							alt="Bureau of Communications Services logo"
+							width={22}
+							height={22}
+							priority
+							className="size-5 shrink-0 object-contain"
+						/>
 					</div>
-					<div className="min-w-0 group-data-[collapsible=icon]:hidden">
-						<p className="truncate text-sm font-semibold">Dashboard</p>
-						<p className="text-muted-foreground truncate text-xs">Workspace</p>
+					<div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
+						<p className="truncate text-xs leading-none font-extrabold tracking-tight text-[#0B1E3F] dark:text-zinc-50">
+							IPPMS ENTERPRISE
+						</p>
+						<p className="mt-1 truncate text-[10px] leading-none font-semibold tracking-wider text-zinc-400 uppercase">
+							Bureau of Comm Services
+						</p>
 					</div>
 				</div>
 			</SidebarHeader>
-			<SidebarSeparator />
+			<SidebarSeparator className="opacity-50" />
 			<SidebarContent>
 				{access.status === "error" ? (
 					<SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -139,62 +152,14 @@ export function AppSidebar({ user, access }: AppSidebarProps) {
 						</div>
 					</SidebarGroup>
 				) : null}
-				<SidebarGroup>
-					<SidebarGroupLabel>Navigation</SidebarGroupLabel>
-					<SidebarGroupContent>
-						<SidebarMenu>
-							{mainItems.map(item => (
-								<SidebarMenuItem key={item.href}>
-									<SidebarMenuButton
-										render={<Link href={item.href} onClick={closeMobileSidebarOnSelect} />}
-										isActive={isActivePath(pathname, item.href)}
-										tooltip={item.label}
-									>
-										<HugeiconsIcon icon={item.icon} strokeWidth={2} />
-										<span>{item.label}</span>
-									</SidebarMenuButton>
-								</SidebarMenuItem>
-							))}
-						</SidebarMenu>
-					</SidebarGroupContent>
-				</SidebarGroup>
-				{adminItems.length > 0 ? (
-					<Collapsible key={isAdminActive ? "active-admin" : "admin"} defaultOpen={isAdminActive}>
-						<SidebarGroup>
-							<SidebarGroupLabel
-								render={
-									<CollapsibleTrigger
-										className={cn(
-											"hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full justify-between",
-											isAdminActive && "text-sidebar-accent-foreground"
-										)}
-									/>
-								}
-							>
-								<span>Administration</span>
-								<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="ml-auto size-4" />
-							</SidebarGroupLabel>
-							<CollapsibleContent>
-								<SidebarGroupContent>
-									<SidebarMenu>
-										{adminItems.map(item => (
-											<SidebarMenuItem key={item.href}>
-												<SidebarMenuButton
-													render={<Link href={item.href} onClick={closeMobileSidebarOnSelect} />}
-													isActive={isActivePath(pathname, item.href)}
-													tooltip={item.label}
-												>
-													<HugeiconsIcon icon={item.icon} strokeWidth={2} />
-													<span>{item.label}</span>
-												</SidebarMenuButton>
-											</SidebarMenuItem>
-										))}
-									</SidebarMenu>
-								</SidebarGroupContent>
-							</CollapsibleContent>
-						</SidebarGroup>
-					</Collapsible>
-				) : null}
+				{groups.map(group => (
+					<NavGroup
+						key={group.section}
+						group={group}
+						pathname={pathname}
+						onSelect={closeMobileSidebarOnSelect}
+					/>
+				))}
 			</SidebarContent>
 			<SidebarFooter>
 				<SidebarMenu>
@@ -242,5 +207,54 @@ export function AppSidebar({ user, access }: AppSidebarProps) {
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>
+	)
+}
+
+interface NavGroupProps {
+	group: DashboardNavGroup
+	pathname: string
+	onSelect: () => void
+}
+
+function NavGroup({ group, pathname, onSelect }: NavGroupProps) {
+	const isGroupActive = group.items.some(item => isActivePath(pathname, item.href))
+	const defaultOpen = isGroupActive || isSectionDefaultOpen(group.section)
+
+	return (
+		<Collapsible key={defaultOpen ? "open" : "closed"} defaultOpen={defaultOpen}>
+			<SidebarGroup>
+				<SidebarGroupLabel
+					render={
+						<CollapsibleTrigger
+							className={cn(
+								"hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full justify-between",
+								isGroupActive && "text-sidebar-accent-foreground"
+							)}
+						/>
+					}
+				>
+					<span>{group.section}</span>
+					<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="ml-auto size-4" />
+				</SidebarGroupLabel>
+				<CollapsibleContent>
+					<SidebarGroupContent>
+						<SidebarMenu>
+							{group.items.map(item => (
+								<SidebarMenuItem key={item.href}>
+									<SidebarMenuButton
+										render={<Link href={item.href} onClick={onSelect} />}
+										isActive={isActivePath(pathname, item.href)}
+										tooltip={item.label}
+									>
+										<HugeiconsIcon icon={item.icon} strokeWidth={2} />
+										<span>{item.label}</span>
+									</SidebarMenuButton>
+								</SidebarMenuItem>
+							))}
+						</SidebarMenu>
+					</SidebarGroupContent>
+				</CollapsibleContent>
+			</SidebarGroup>
+		</Collapsible>
 	)
 }

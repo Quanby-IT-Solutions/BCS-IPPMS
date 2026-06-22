@@ -16,6 +16,14 @@ export class RbacService {
 		const cached = this.cacheService.get(userId)
 		if (cached) return cached
 
+		// Resolve the active flag separately: a user with no roles still needs its
+		// account status known, and the role query below starts FROM userRoles so it
+		// would not return such a user. A missing row → inactive (fail-closed).
+		const [userRow] = await db
+			.select({ isActive: users.isActive })
+			.from(users)
+			.where(eq(users.id, userId))
+
 		const rows = await db
 			.select({
 				roleName: roles.name,
@@ -30,6 +38,7 @@ export class RbacService {
 		const set: ResolvedPermissionSet = {
 			roleNames: new Set<string>(),
 			permissionNames: new Set<string>(),
+			active: userRow?.isActive ?? false,
 		}
 
 		for (const row of rows) {
@@ -39,6 +48,15 @@ export class RbacService {
 
 		this.cacheService.set(userId, set)
 		return set
+	}
+
+	/**
+	 * Whether the user's account is active. Deactivated (or non-existent) users
+	 * resolve to false; the RbacGuard uses this to deny protected access.
+	 */
+	async isActive(userId: string): Promise<boolean> {
+		const set = await this.resolveForUser(userId)
+		return set.active
 	}
 
 	private static readonly permissionCatalog = new Set<string>(PERMISSION_NAMES)

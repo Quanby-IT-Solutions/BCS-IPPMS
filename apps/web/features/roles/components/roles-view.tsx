@@ -5,12 +5,15 @@ import {
 	Add01Icon,
 	Delete02Icon,
 	PencilEdit02Icon,
+	SecurityCheckIcon,
 	UserMultipleIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import { toast } from "sonner"
 
 import type { Role } from "@repo/contracts"
 
+import { PageHeader } from "@/core/components/page-header"
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -39,47 +42,53 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/core/components/ui/table"
+import { RoleEditor } from "@/features/roles/components/role-editor"
 import { useDeleteRoleMutation, useRolesQuery } from "@/features/user-management/api/rbac.hooks"
-import { RoleFormDialog } from "@/features/user-management/components/role-form-dialog"
 
-export function RolesPanel() {
+type EditorState = { mode: "list" } | { mode: "create" } | { mode: "edit"; role: Role }
+
+export function RolesView() {
 	const { data: roles, isLoading, isError, error } = useRolesQuery()
 	const deleteRole = useDeleteRoleMutation()
 
-	const [dialogOpen, setDialogOpen] = useState(false)
-	const [editingRole, setEditingRole] = useState<Role | undefined>(undefined)
+	const [editor, setEditor] = useState<EditorState>({ mode: "list" })
 	const [roleToDelete, setRoleToDelete] = useState<Role | null>(null)
-
-	function openCreate() {
-		setEditingRole(undefined)
-		setDialogOpen(true)
-	}
-
-	function openEdit(role: Role) {
-		setEditingRole(role)
-		setDialogOpen(true)
-	}
 
 	async function confirmDelete() {
 		if (!roleToDelete) return
-		await deleteRole.mutateAsync(roleToDelete.id)
-		setRoleToDelete(null)
+		try {
+			await deleteRole.mutateAsync(roleToDelete.id)
+			toast.success(`Deleted "${roleToDelete.name}"`)
+			setRoleToDelete(null)
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to delete role")
+		}
+	}
+
+	if (editor.mode !== "list") {
+		return (
+			<section className="flex w-full flex-col gap-6">
+				<RoleEditor
+					role={editor.mode === "edit" ? editor.role : undefined}
+					onClose={() => setEditor({ mode: "list" })}
+				/>
+			</section>
+		)
 	}
 
 	return (
-		<div className="flex flex-col gap-4">
-			<div className="flex items-center justify-between">
-				<div>
-					<h2 className="text-lg font-semibold">Roles</h2>
-					<p className="text-muted-foreground text-sm">
-						Create roles and choose which permissions they grant.
-					</p>
-				</div>
-				<Button onClick={openCreate} size="sm">
-					<HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-					New role
-				</Button>
-			</div>
+		<section className="flex w-full flex-col gap-6">
+			<PageHeader
+				icon={SecurityCheckIcon}
+				title="Roles & Permissions"
+				description="Compose roles from the permission matrix."
+				actions={
+					<Button onClick={() => setEditor({ mode: "create" })} size="sm">
+						<HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+						Create role
+					</Button>
+				}
+			/>
 
 			{isLoading ? (
 				<div className="flex flex-col gap-2">
@@ -101,9 +110,9 @@ export function RolesPanel() {
 						<TableHeader>
 							<TableRow>
 								<TableHead>Role</TableHead>
-								<TableHead>Permissions</TableHead>
+								<TableHead className="text-right">Permissions</TableHead>
 								<TableHead className="text-right">Users</TableHead>
-								<TableHead className="w-0">Actions</TableHead>
+								<TableHead className="w-0 text-right">Actions</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -117,19 +126,11 @@ export function RolesPanel() {
 												<div className="text-muted-foreground text-xs">{role.description}</div>
 											) : null}
 										</TableCell>
-										<TableCell className="align-top">
+										<TableCell className="text-right align-top">
 											{isAdmin ? (
-												<Badge variant="secondary">All permissions</Badge>
-											) : role.permissions.length ? (
-												<div className="flex flex-wrap gap-1">
-													{role.permissions.map(permission => (
-														<Badge key={permission} variant="outline">
-															{permission}
-														</Badge>
-													))}
-												</div>
+												<Badge variant="secondary">All</Badge>
 											) : (
-												<span className="text-muted-foreground text-xs">None</span>
+												<span className="tabular-nums">{role.permissions.length}</span>
 											)}
 										</TableCell>
 										<TableCell className="text-right align-top tabular-nums">
@@ -140,7 +141,7 @@ export function RolesPanel() {
 												<Button
 													variant="ghost"
 													size="icon-sm"
-													onClick={() => openEdit(role)}
+													onClick={() => setEditor({ mode: "edit", role })}
 													aria-label={`Edit ${role.name}`}
 												>
 													<HugeiconsIcon icon={PencilEdit02Icon} strokeWidth={2} />
@@ -176,8 +177,6 @@ export function RolesPanel() {
 				</Empty>
 			) : null}
 
-			<RoleFormDialog open={dialogOpen} onOpenChange={setDialogOpen} role={editingRole} />
-
 			<AlertDialog
 				open={Boolean(roleToDelete)}
 				onOpenChange={open => !open && setRoleToDelete(null)}
@@ -203,6 +202,6 @@ export function RolesPanel() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-		</div>
+		</section>
 	)
 }

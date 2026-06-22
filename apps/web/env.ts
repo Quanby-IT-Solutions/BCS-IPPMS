@@ -33,6 +33,15 @@ export const env = createEnv({
 		NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3001"),
 		NEXT_PUBLIC_API_BASE_URL: z.url().default("http://localhost:3000/api"),
 		NEXT_PUBLIC_API_VERSION: z.string().default("v1"),
+
+		// Dev-only quick login. Renders one-click seeded-account sign-in on the
+		// login page. Never exposed in production regardless of this flag.
+		NEXT_PUBLIC_ENABLE_DEV_LOGIN: z
+			.string()
+			.optional()
+			.transform(value => value === "true")
+			.pipe(z.boolean())
+			.default(false),
 	},
 
 	/**
@@ -48,6 +57,7 @@ export const env = createEnv({
 		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 		NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
 		NEXT_PUBLIC_API_VERSION: process.env.NEXT_PUBLIC_API_VERSION,
+		NEXT_PUBLIC_ENABLE_DEV_LOGIN: process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN,
 	},
 
 	/**

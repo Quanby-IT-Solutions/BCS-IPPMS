@@ -77,6 +77,14 @@ export class RbacGuard implements CanActivate {
 			throw new UnauthorizedException("Authentication required")
 		}
 
+		// Deactivated users keep a valid Better Auth session cookie, so enforcement
+		// happens here: an inactive principal is denied all protected access,
+		// regardless of roles (including Admin). Reactivation restores access.
+		const active = await this.rbacService.isActive(userId)
+		if (!active) {
+			throw new ForbiddenException("Account is deactivated")
+		}
+
 		const allowed = await this.rbacService.hasAllPermissions(userId, requiredPermissions)
 		if (allowed) {
 			return true

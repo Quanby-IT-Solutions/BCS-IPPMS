@@ -13,13 +13,14 @@ import {
 import { Separator } from "@/core/components/ui/separator"
 import { SidebarTrigger } from "@/core/components/ui/sidebar"
 import { getDashboardRouteTitle } from "@/features/dashboard/lib/nav-items"
+import { NotificationsMenu } from "@/features/notifications/components/notifications-menu"
 
 export function SiteHeader() {
 	const pathname = usePathname()
 	const title = getDashboardRouteTitle(pathname)
 
 	return (
-		<header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-10 flex h-14 items-center gap-2 border-b px-4 backdrop-blur">
+		<header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 border-border/60 sticky top-0 z-10 flex h-14 items-center gap-2 border-b px-4 backdrop-blur-md">
 			<SidebarTrigger className="-ml-1" />
 			<Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
 			<Breadcrumb>
@@ -34,6 +35,7 @@ export function SiteHeader() {
 				</BreadcrumbList>
 			</Breadcrumb>
 			<div className="ml-auto flex items-center gap-1">
+				<NotificationsMenu />
 				<ThemeToggle />
 			</div>
 		</header>

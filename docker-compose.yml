@@ -60,6 +60,7 @@ services:
         - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
         - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
         - NEXT_PUBLIC_API_VERSION=${NEXT_PUBLIC_API_VERSION}
+        - NEXT_PUBLIC_ENABLE_DEV_LOGIN=${NEXT_PUBLIC_ENABLE_DEV_LOGIN:-true}
     container_name: turbo-template-web
     # Bound to loopback so an external/host Nginx can reach it when the
     # bundled proxy is disabled. Not exposed to the LAN. The Docker Nginx
@@ -81,6 +82,7 @@ services:
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
       - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
       - NEXT_PUBLIC_API_VERSION=${NEXT_PUBLIC_API_VERSION}
+      - NEXT_PUBLIC_ENABLE_DEV_LOGIN=${NEXT_PUBLIC_ENABLE_DEV_LOGIN:-true}
     env_file:
       - apps/web/.env
     networks:

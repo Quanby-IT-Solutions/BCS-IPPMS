@@ -7,7 +7,7 @@ import { MePermissionsSchema, type MePermissions } from "@repo/contracts"
 import { getCookieHeader } from "@/core/lib/cookie-utils"
 import { getServerApiUrl } from "@/core/lib/server-utils"
 
-type AccessErrorReason = "request-failed" | "invalid-response"
+type AccessErrorReason = "request-failed" | "invalid-response" | "forbidden"
 
 export type AccessResult =
 	| ({ status: "loaded" } & MePermissions)
@@ -38,6 +38,10 @@ export const getAccess = cache(async (): Promise<AccessResult> => {
 			},
 			cache: "no-store",
 		})
+
+		if (response.status === 401 || response.status === 403) {
+			return accessError("forbidden")
+		}
 
 		if (!response.ok) {
 			return accessError("request-failed")

@@ -1,4 +1,4 @@
-import { Controller, UnauthorizedException } from "@nestjs/common"
+import { Controller, ForbiddenException, UnauthorizedException } from "@nestjs/common"
 import { Implement } from "@orpc/nest"
 import { implement } from "@orpc/server"
 import { Session, type UserSession } from "@thallesp/nestjs-better-auth"
@@ -16,6 +16,11 @@ export class MeController {
 			const userId = session?.user?.id
 			if (!userId) {
 				throw new UnauthorizedException("Authentication required")
+			}
+
+			const active = await this.rbacService.isActive(userId)
+			if (!active) {
+				throw new ForbiddenException("Account is deactivated")
 			}
 
 			return this.rbacService.getUserAccess(userId)

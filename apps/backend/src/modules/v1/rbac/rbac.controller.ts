@@ -1,6 +1,7 @@
 import { Controller } from "@nestjs/common"
 import { Implement } from "@orpc/nest"
 import { implement } from "@orpc/server"
+import { Session, type UserSession } from "@thallesp/nestjs-better-auth"
 
 import { v1 } from "@/config/api-versions.config"
 import { RequirePermissions } from "@/shared/decorators/require-permissions.decorator"
@@ -12,7 +13,7 @@ export class RbacController {
 	constructor(private readonly rbacAdminService: RbacAdminService) {}
 
 	// ---------------------------------------------------------------- roles
-	@RequirePermissions("users:read")
+	@RequirePermissions("roles:read")
 	@Implement(v1.rbac.roles.list)
 	async listRoles() {
 		return implement(v1.rbac.roles.list).handler(async () => {
@@ -20,40 +21,42 @@ export class RbacController {
 		})
 	}
 
-	@RequirePermissions("users:manage")
+	@RequirePermissions("roles:create")
 	@Implement(v1.rbac.roles.create)
-	async createRole() {
+	async createRole(@Session() session?: UserSession) {
 		return implement(v1.rbac.roles.create).handler(async ({ input }) => {
-			return this.rbacAdminService.createRole(input)
+			return this.rbacAdminService.createRole(input, session?.user?.id ?? null)
 		})
 	}
 
-	@RequirePermissions("users:manage")
+	@RequirePermissions("roles:update")
 	@Implement(v1.rbac.roles.update)
-	async updateRole() {
+	async updateRole(@Session() session?: UserSession) {
 		return implement(v1.rbac.roles.update).handler(async ({ input }) => {
-			return this.rbacAdminService.updateRole(input)
+			return this.rbacAdminService.updateRole(input, session?.user?.id ?? null)
 		})
 	}
 
-	@RequirePermissions("users:manage")
+	// Changing a role's permission set needs both editing the role and assigning
+	// permissions (AND semantics); Admin/wildcard still bypass via the guard.
+	@RequirePermissions("roles:update", "permissions:assign")
 	@Implement(v1.rbac.roles.setPermissions)
-	async setRolePermissions() {
+	async setRolePermissions(@Session() session?: UserSession) {
 		return implement(v1.rbac.roles.setPermissions).handler(async ({ input }) => {
-			return this.rbacAdminService.setRolePermissions(input)
+			return this.rbacAdminService.setRolePermissions(input, session?.user?.id ?? null)
 		})
 	}
 
-	@RequirePermissions("users:manage")
+	@RequirePermissions("roles:delete")
 	@Implement(v1.rbac.roles.delete)
-	async deleteRole() {
+	async deleteRole(@Session() session?: UserSession) {
 		return implement(v1.rbac.roles.delete).handler(async ({ input }) => {
-			return this.rbacAdminService.deleteRole(input.id)
+			return this.rbacAdminService.deleteRole(input.id, session?.user?.id ?? null)
 		})
 	}
 
 	// ---------------------------------------------------------- permissions
-	@RequirePermissions("users:read")
+	@RequirePermissions("permissions:read")
 	@Implement(v1.rbac.permissions.list)
 	async listPermissions() {
 		return implement(v1.rbac.permissions.list).handler(async () => {
@@ -70,19 +73,53 @@ export class RbacController {
 		})
 	}
 
+	@RequirePermissions("users:create")
+	@Implement(v1.rbac.users.create)
+	async createUser(@Session() session?: UserSession) {
+		return implement(v1.rbac.users.create).handler(async ({ input }) => {
+			return this.rbacAdminService.createUser(input, session?.user?.id ?? null)
+		})
+	}
+
+	@RequirePermissions("users:update")
+	@Implement(v1.rbac.users.update)
+	async updateUser(@Session() session?: UserSession) {
+		return implement(v1.rbac.users.update).handler(async ({ input }) => {
+			return this.rbacAdminService.updateUser(input, session?.user?.id ?? null)
+		})
+	}
+
+	// Soft deactivate/reactivate is the closest analogue to deletion for a user
+	// account (the record + credentials are retained), so it is gated by users:delete.
+	@RequirePermissions("users:delete")
+	@Implement(v1.rbac.users.setActive)
+	async setUserActive(@Session() session?: UserSession) {
+		return implement(v1.rbac.users.setActive).handler(async ({ input }) => {
+			return this.rbacAdminService.setUserActive(input, session?.user?.id ?? null)
+		})
+	}
+
 	@RequirePermissions("users:manage")
 	@Implement(v1.rbac.users.assignRole)
-	async assignRole() {
+	async assignRole(@Session() session?: UserSession) {
 		return implement(v1.rbac.users.assignRole).handler(async ({ input }) => {
-			return this.rbacAdminService.assignUserRole(input)
+			return this.rbacAdminService.assignUserRole(input, session?.user?.id ?? null)
 		})
 	}
 
 	@RequirePermissions("users:manage")
 	@Implement(v1.rbac.users.removeRole)
-	async removeRole() {
+	async removeRole(@Session() session?: UserSession) {
 		return implement(v1.rbac.users.removeRole).handler(async ({ input }) => {
-			return this.rbacAdminService.removeUserRole(input)
+			return this.rbacAdminService.removeUserRole(input, session?.user?.id ?? null)
+		})
+	}
+
+	@RequirePermissions("users:manage")
+	@Implement(v1.rbac.users.assignDivision)
+	async assignDivision(@Session() session?: UserSession) {
+		return implement(v1.rbac.users.assignDivision).handler(async ({ input }) => {
+			return this.rbacAdminService.assignUserDivision(input, session?.user?.id ?? null)
 		})
 	}
 }

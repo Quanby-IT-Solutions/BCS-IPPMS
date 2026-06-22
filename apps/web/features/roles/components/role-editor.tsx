@@ -1,49 +1,33 @@
 "use client"
 
 import { useState } from "react"
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { toast } from "sonner"
 
 import type { PermissionName, Role } from "@repo/contracts"
 
 import { Button } from "@/core/components/ui/button"
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@/core/components/ui/dialog"
 import { Field, FieldError, FieldLabel } from "@/core/components/ui/field"
 import { Input } from "@/core/components/ui/input"
-import { Textarea } from "@/core/components/ui/textarea"
+import { PermissionMatrix } from "@/features/roles/components/permission-matrix"
 import {
 	useCreateRoleMutation,
+	useRolesQuery,
 	useSetRolePermissionsMutation,
 	useUpdateRoleMutation,
 } from "@/features/user-management/api/rbac.hooks"
-import { PermissionChecklist } from "@/features/user-management/components/permission-checklist"
 
-interface RoleFormDialogProps {
-	open: boolean
-	onOpenChange: (open: boolean) => void
+interface RoleEditorProps {
 	role?: Role
+	onClose: () => void
 }
 
-export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps) {
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-lg">
-				{open ? (
-					<RoleForm key={role?.id ?? "new"} role={role} onClose={() => onOpenChange(false)} />
-				) : null}
-			</DialogContent>
-		</Dialog>
-	)
-}
-
-function RoleForm({ role, onClose }: { role?: Role; onClose: () => void }) {
+export function RoleEditor({ role, onClose }: RoleEditorProps) {
 	const isEdit = Boolean(role)
 	const isAdminRole = role?.name === "Admin"
+
+	const { data: roles } = useRolesQuery()
 
 	const [name, setName] = useState(role?.name ?? "")
 	const [description, setDescription] = useState(role?.description ?? "")
@@ -66,6 +50,14 @@ function RoleForm({ role, onClose }: { role?: Role; onClose: () => void }) {
 			return
 		}
 
+		const duplicate = (roles ?? []).some(
+			r => r.id !== role?.id && r.name.toLowerCase() === trimmed.toLowerCase()
+		)
+		if (duplicate) {
+			setFormError("A role with this name already exists")
+			return
+		}
+
 		try {
 			if (isEdit && role) {
 				await updateRole.mutateAsync({
@@ -74,6 +66,7 @@ function RoleForm({ role, onClose }: { role?: Role; onClose: () => void }) {
 					description: description.trim() || null,
 				})
 				await setRolePermissions.mutateAsync({ id: role.id, permissions })
+				toast.success("Role updated")
 			} else {
 				const created = await createRole.mutateAsync({
 					name: trimmed,
@@ -82,25 +75,31 @@ function RoleForm({ role, onClose }: { role?: Role; onClose: () => void }) {
 				if (permissions.length) {
 					await setRolePermissions.mutateAsync({ id: created.id, permissions })
 				}
+				toast.success("Role created")
 			}
 			onClose()
 		} catch (err) {
-			setFormError(err instanceof Error ? err.message : "Something went wrong")
+			const message = err instanceof Error ? err.message : "Something went wrong"
+			setFormError(message)
+			toast.error(message)
 		}
 	}
 
 	return (
-		<>
-			<DialogHeader>
-				<DialogTitle>{isEdit ? "Edit role" : "New role"}</DialogTitle>
-				<DialogDescription>
-					{isEdit
-						? "Update the role details and the permissions it grants."
-						: "Create a role and choose which permissions it grants."}
-				</DialogDescription>
-			</DialogHeader>
+		<form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+			<div className="flex items-center gap-2">
+				<Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Back">
+					<HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+				</Button>
+				<div>
+					<h2 className="text-lg font-semibold">{isEdit ? `Edit ${role?.name}` : "New role"}</h2>
+					<p className="text-muted-foreground text-sm">
+						Set the role details and choose the permissions it grants.
+					</p>
+				</div>
+			</div>
 
-			<form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+			<div className="grid gap-4 sm:grid-cols-2">
 				<Field data-invalid={Boolean(formError)}>
 					<FieldLabel htmlFor="role-name">Name</FieldLabel>
 					<Input
@@ -118,32 +117,31 @@ function RoleForm({ role, onClose }: { role?: Role; onClose: () => void }) {
 
 				<Field>
 					<FieldLabel htmlFor="role-description">Description</FieldLabel>
-					<Textarea
+					<Input
 						id="role-description"
 						value={description}
 						onChange={e => setDescription(e.target.value)}
 						placeholder="What is this role for?"
 						disabled={isPending}
-						rows={2}
 					/>
 				</Field>
+			</div>
 
-				<Field>
-					<FieldLabel>Permissions</FieldLabel>
-					<PermissionChecklist value={permissions} onChange={setPermissions} disabled={isPending} />
-				</Field>
+			<Field>
+				<FieldLabel>Permissions</FieldLabel>
+				<PermissionMatrix value={permissions} onChange={setPermissions} disabled={isPending} />
+			</Field>
 
-				{formError ? <FieldError>{formError}</FieldError> : null}
+			{formError ? <FieldError>{formError}</FieldError> : null}
 
-				<DialogFooter>
-					<Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-						Cancel
-					</Button>
-					<Button type="submit" disabled={isPending}>
-						{isPending ? "Saving..." : isEdit ? "Save changes" : "Create role"}
-					</Button>
-				</DialogFooter>
-			</form>
-		</>
+			<div className="flex items-center justify-end gap-2">
+				<Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+					Cancel
+				</Button>
+				<Button type="submit" disabled={isPending}>
+					{isPending ? "Saving..." : isEdit ? "Save changes" : "Create role"}
+				</Button>
+			</div>
+		</form>
 	)
 }

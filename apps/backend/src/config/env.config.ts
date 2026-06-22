@@ -16,6 +16,10 @@ export const env = createEnv({
 		// Database
 		DATABASE_URL: z.string(),
 
+		// Storage (local-disk StorageService root). Safe default for local dev:
+		// a `storage` directory under the backend's current working directory.
+		STORAGE_ROOT: z.string().min(1).default("storage"),
+
 		// Authentication
 		BETTER_AUTH_SECRET: z.string(),
 		BETTER_AUTH_TRUSTED_ORIGINS: z.string(),

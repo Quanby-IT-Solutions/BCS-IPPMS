@@ -1,0 +1,3 @@
+[DEV SEED] Customer Onboarding Revamp - Project Brief
+
+Goal: cut onboarding from 10 days to 3 days.

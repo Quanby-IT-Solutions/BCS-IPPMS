@@ -2,62 +2,58 @@
 
 import * as React from "react"
 import type { Route } from "next"
+import Image from "next/image"
 import Link from "next/link"
-import { GitbookFreeIcons } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 
-import { Button, buttonVariants, type ButtonVariants } from "@/core/components/ui/button"
+import { buttonVariants, type ButtonVariants } from "@/core/components/ui/button"
 import { cn } from "@/core/lib/utils"
 
-export interface LogoIconProps extends Omit<
-	React.ComponentPropsWithoutRef<typeof HugeiconsIcon>,
-	"icon"
-> {
-	icon?: typeof GitbookFreeIcons
-	strokeWidth?: number
-	ref?: React.Ref<SVGSVGElement>
+export const BCS_LOGO_SRC = "/logo/bcs.png"
+
+export interface LogoIconProps {
+	size?: number
+	className?: string
+	priority?: boolean
 }
 
-export const LogoIcon = React.memo(
-	({ icon, strokeWidth = 2, className, ref, ...props }: LogoIconProps) => {
-		const iconToUse = icon || GitbookFreeIcons
-		return (
-			<HugeiconsIcon
-				ref={ref}
-				icon={iconToUse}
-				strokeWidth={strokeWidth}
-				className={cn("text-primary", className)}
-				{...props}
-			/>
-		)
-	}
-)
+export const LogoIcon = React.memo(({ size = 32, className, priority }: LogoIconProps) => {
+	return (
+		<Image
+			src={BCS_LOGO_SRC}
+			alt="Bureau of Communications Services logo"
+			width={size}
+			height={size}
+			priority={priority}
+			className={cn("shrink-0 object-contain", className)}
+		/>
+	)
+})
 LogoIcon.displayName = "LogoIcon"
 
 export interface LogoProps {
 	text?: string
 	href?: Route<string>
 	showIcon?: boolean
-	icon?: typeof GitbookFreeIcons
-	strokeWidth?: number
+	iconSize?: number
+	priority?: boolean
 	size?: ButtonVariants["size"]
 	variant?: ButtonVariants["variant"]
 	className?: string
 }
 
 export function Logo({
-	text = "Turbo Template",
+	text = "Bureau of Communications Services",
 	href,
 	size = "lg",
 	variant = "link",
 	showIcon = true,
-	icon,
-	strokeWidth,
+	iconSize = 40,
+	priority,
 	className,
 }: LogoProps) {
 	const content = (
 		<>
-			{showIcon && <LogoIcon icon={icon} strokeWidth={strokeWidth} data-icon="inline-start" />}
+			{showIcon && <LogoIcon size={iconSize} priority={priority} />}
 			{text}
 		</>
 	)
@@ -65,7 +61,7 @@ export function Logo({
 	if (href) {
 		return (
 			<Link
-				className={cn(buttonVariants({ size, variant }), "text-foreground", className)}
+				className={cn(buttonVariants({ size, variant }), "text-foreground h-auto gap-2", className)}
 				href={href}
 			>
 				{content}
@@ -74,8 +70,14 @@ export function Logo({
 	}
 
 	return (
-		<Button size={size} variant={variant} className={cn("text-foreground", className)}>
+		<span
+			className={cn(
+				buttonVariants({ size, variant }),
+				"text-foreground pointer-events-none h-auto gap-2",
+				className
+			)}
+		>
 			{content}
-		</Button>
+		</span>
 	)
 }

@@ -22,7 +22,7 @@ export function useRegisterMutation() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all })
-			router.push("/")
+			router.push("/dashboard")
 			router.refresh()
 		},
 	})

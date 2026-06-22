@@ -1,0 +1,3 @@
+[DEV SEED] Customer Onboarding Revamp - Technical Spec
+
+Automation steps, integrations, and rollout plan.

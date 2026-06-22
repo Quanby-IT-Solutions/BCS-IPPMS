@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import type {
+	AssignUserDivisionResponse,
 	CreateRoleInput,
+	CreateUserInput,
 	PermissionCatalogEntry,
 	PermissionName,
 	Role,
@@ -138,5 +140,57 @@ export function useRemoveRoleMutation() {
 			queryClient.invalidateQueries({ queryKey: rbacKeys.users })
 			queryClient.invalidateQueries({ queryKey: rbacKeys.roles })
 		},
+	})
+}
+
+// ----------------------------------------------------------- user management
+export function useCreateUserMutation() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		mutationFn: (payload: CreateUserInput) =>
+			apiFetch<UserWithRoles>("/rbac/users", {
+				method: "POST",
+				body: JSON.stringify(payload),
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: rbacKeys.users })
+			queryClient.invalidateQueries({ queryKey: rbacKeys.roles })
+		},
+	})
+}
+
+export function useUpdateUserMutation() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		mutationFn: ({ userId, ...rest }: { userId: string; name?: string; email?: string }) =>
+			apiFetch<UserWithRoles>(`/rbac/users/${userId}`, {
+				method: "PUT",
+				body: JSON.stringify(rest),
+			}),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: rbacKeys.users }),
+	})
+}
+
+export function useSetUserActiveMutation() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
+			apiFetch<UserWithRoles>(`/rbac/users/${userId}/active`, {
+				method: "PUT",
+				body: JSON.stringify({ isActive }),
+			}),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: rbacKeys.users }),
+	})
+}
+
+export function useAssignUserDivisionMutation() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		mutationFn: ({ userId, divisionId }: { userId: string; divisionId: number | null }) =>
+			apiFetch<AssignUserDivisionResponse>(`/rbac/users/${userId}/division`, {
+				method: "PUT",
+				body: JSON.stringify({ divisionId }),
+			}),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: rbacKeys.users }),
 	})
 }

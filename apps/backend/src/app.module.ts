@@ -10,8 +10,11 @@ import { HttpExceptionFilter } from "@/common/filters/http-exception.filter"
 import { V1Module } from "@/modules/v1/v1.module"
 import { RbacGuard } from "@/shared/guards/rbac.guard"
 
+import { AuditModule } from "./common/audit/audit.module"
+import { DivisionScopeModule } from "./common/division-scope/division-scope.module"
 import { ORPCCommonModule } from "./common/orpc/orpc.module"
 import { RbacModule } from "./common/rbac/rbac.module"
+import { StorageModule } from "./common/storage/storage.module"
 import { env } from "./config/env.config"
 
 @Module({
@@ -28,6 +31,10 @@ import { env } from "./config/env.config"
 		ORPCCommonModule,
 		// RBAC services
 		RbacModule,
+		// Shared backbone services (available to feature modules; no global behavior)
+		DivisionScopeModule,
+		StorageModule,
+		AuditModule,
 		// Versioned modules
 		V1Module,
 	],
