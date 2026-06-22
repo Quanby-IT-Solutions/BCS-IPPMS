@@ -89,7 +89,26 @@ describe("navItems", () => {
 
 		expect(
 			getAccessibleNavItems({ roles: ["Admin"], permissions: [] }).map(item => item.label)
-		).toEqual(["Dashboard", "Submit Ticket", "Todos / Posts", "User Management"])
+		).toEqual([
+			"Dashboard",
+			"Submit Ticket",
+			"Todos / Posts",
+			"Projects",
+			"Tasks Board",
+			"My Approvals",
+			"Workflow Builder",
+			"Production",
+			"Circulation",
+			"Analytics",
+			"Calendar",
+			"User Management",
+			"Roles & Permissions",
+			"Divisions",
+			"Audit Log",
+			"Reports",
+			"Security",
+			"API Management",
+		])
 	})
 
 	it("resolves mobile header titles from dashboard routes", () => {

@@ -10,6 +10,7 @@ jest.mock("@/common/rbac/rbac.service", () => ({
 	RbacService: jest.fn().mockImplementation(() => ({
 		hasAllPermissions: jest.fn(),
 		getMissingPermissions: jest.fn(),
+		isActive: jest.fn(),
 	})),
 }))
 
@@ -47,7 +48,7 @@ const buildContext = (session?: unknown, user?: unknown): ExecutionContext =>
 describe("RbacGuard", () => {
 	let guard: RbacGuard
 	let reflector: { getAllAndOverride: jest.Mock }
-	let rbacService: { hasAllPermissions: jest.Mock; getMissingPermissions: jest.Mock }
+	let rbacService: { hasAllPermissions: jest.Mock; getMissingPermissions: jest.Mock; isActive: jest.Mock }
 	const env = require("@/config/env.config").env as { NODE_ENV: string }
 
 	beforeEach(async () => {
@@ -67,7 +68,9 @@ describe("RbacGuard", () => {
 		rbacService = app.get(RbacService) as unknown as {
 			hasAllPermissions: jest.Mock
 			getMissingPermissions: jest.Mock
+			isActive: jest.Mock
 		}
+		rbacService.isActive.mockResolvedValue(true)
 	})
 
 	it("allows when no metadata present (no-op)", async () => {
@@ -201,6 +204,16 @@ describe("RbacGuard", () => {
 				"posts:read",
 			])
 		}
+	})
+
+	it("throws ForbiddenException when the account is deactivated", async () => {
+		reflector.getAllAndOverride.mockReturnValue(["posts:create"])
+		rbacService.isActive.mockResolvedValue(false)
+
+		await expect(guard.canActivate(buildContext({ user: { id: "u1" } }))).rejects.toBeInstanceOf(
+			ForbiddenException
+		)
+		expect(rbacService.hasAllPermissions).not.toHaveBeenCalled()
 	})
 
 	it("returns generic 403 message in production", async () => {

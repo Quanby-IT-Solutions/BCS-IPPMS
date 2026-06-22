@@ -1,4 +1,4 @@
-import { UnauthorizedException } from "@nestjs/common"
+import { ForbiddenException, UnauthorizedException } from "@nestjs/common"
 import { Test, type TestingModule } from "@nestjs/testing"
 
 import { RbacService } from "@/common/rbac/rbac.service"
@@ -47,11 +47,12 @@ jest.mock("@thallesp/nestjs-better-auth", () => ({
 
 describe("MeController", () => {
 	let controller: MeController
-	let rbacService: { getUserAccess: jest.Mock }
+	let rbacService: { getUserAccess: jest.Mock; isActive: jest.Mock }
 
 	beforeEach(async () => {
 		rbacService = {
 			getUserAccess: jest.fn(),
+			isActive: jest.fn().mockResolvedValue(true),
 		}
 
 		const module: TestingModule = await Test.createTestingModule({
@@ -77,6 +78,15 @@ describe("MeController", () => {
 
 	it("throws UnauthorizedException if the session is missing", async () => {
 		await expect(controller.getPermissions(undefined)).rejects.toBeInstanceOf(UnauthorizedException)
+		expect(rbacService.getUserAccess).not.toHaveBeenCalled()
+	})
+
+	it("throws ForbiddenException when the account is deactivated", async () => {
+		rbacService.isActive.mockResolvedValue(false)
+
+		await expect(
+			controller.getPermissions({ user: { id: "user-1" } } as never)
+		).rejects.toBeInstanceOf(ForbiddenException)
 		expect(rbacService.getUserAccess).not.toHaveBeenCalled()
 	})
 })
