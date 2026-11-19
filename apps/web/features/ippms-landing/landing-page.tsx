@@ -1530,8 +1530,8 @@ export function IppmsLandingPage() {
 							</p>
 
 							<blockquote className="mb-6 max-w-sm rounded-r-lg border-l-4 border-amber-500 bg-amber-500/5 py-1 pl-4 font-serif text-sm text-zinc-500 italic dark:bg-amber-500/3 dark:text-zinc-400">
-								"Government communications represent a sovereign trust. IPPMS hardens operations to
-								secure records from external and internal threats."
+								&ldquo;Government communications represent a sovereign trust. IPPMS hardens operations
+								to secure records from external and internal threats.&rdquo;
 							</blockquote>
 
 							<div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-slate-800/80 dark:bg-[#141F3C]/40">

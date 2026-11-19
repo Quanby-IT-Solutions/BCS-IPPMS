@@ -77,6 +77,11 @@ export const verifications = createTable(
 	t => [
 		// Composite primary key on identifier and value
 		primaryKey({ columns: [t.identifier, t.value] }),
+		// Rows here are short-lived tokens, but nothing deleted them,
+		// so the table only ever grew — every unverified signup and every password
+		// reset, kept forever. The sweeper deletes by expiry; without this index it
+		// seq-scans a table whose whole problem is that it is large.
+		index("verifications_expires_at_idx").on(t.expiresAt),
 	]
 )
 
@@ -120,6 +125,39 @@ export const tickets = createTable("tickets", t => ({
 	createdAt: t.timestamp("created_at").notNull().defaultNow(),
 	updatedAt: t.timestamp("updated_at").notNull().defaultNow(),
 }))
+
+// ============================================================================
+// IDEMPOTENCY KEYS
+// ============================================================================
+
+/**
+ * Replay cache for mutating requests.
+ *
+ * The primary key is composite on `(authorId, key)`. It used to be `key`
+ * alone, which made the keyspace global: whoever sent a value first owned it,
+ * so one user could squat another's key and the second user's request was
+ * rejected as a duplicate — a denial-of-service against any client using
+ * predictable keys. Idempotency is identity-scoped by design; two users
+ * sending the same key are sending two unrelated requests.
+ *
+ * This is a cache, not a record. Rows expire and are swept.
+ */
+export const idempotencyKeys = createTable(
+	"idempotency_keys",
+	t => ({
+		key: t.text("key").notNull(),
+		authorId: t.text("author_id").notNull(),
+		response: t.jsonb("response").notNull().$type<unknown>(),
+		createdAt: t.timestamp("created_at").notNull().defaultNow(),
+		/** When this row stops being a valid replay target. */
+		expiresAt: t.timestamp("expires_at").notNull(),
+	}),
+	t => [
+		primaryKey({ columns: [t.authorId, t.key] }),
+		// The sweeper deletes by expiry; without this it seq-scans the table.
+		index("idempotency_keys_expires_at_idx").on(t.expiresAt),
+	]
+)
 
 // ============================================================================
 // RBAC
@@ -387,6 +425,26 @@ export const files = createTable(
 	t => [index("files_owner_idx").on(t.ownerType, t.ownerId)]
 )
 
+/**
+ * Append-only record of privileged actions.
+ *
+ * This is the single audit trail. The upstream template carried a second,
+ * narrower `audit_log` table scoped to RBAC events; its stronger guarantees
+ * were folded in here instead of running two trails, because "a complete
+ * audit trail" is a contractual requirement and two tables cannot satisfy it
+ * between them. What came across from upstream:
+ *
+ * - `outcome` — a refused attempt is evidence, so denials are recorded, not
+ *   just successes.
+ * - `oldValue` / `newValue` — what the state was and became.
+ * - `reason` — why an attempt was refused.
+ *
+ * There is deliberately no `updatedAt`: a row that can be updated is not an
+ * audit trail. The application exposes no UPDATE or DELETE path to this table.
+ *
+ * `actorId` is nullable and uses `set null` rather than `cascade`: deleting a
+ * user must never erase the record of what they did.
+ */
 export const auditLogs = createTable(
 	"audit_logs",
 	t => ({
@@ -396,10 +454,21 @@ export const auditLogs = createTable(
 		module: t.text("module"),
 		entityType: t.text("entity_type"),
 		entityId: t.text("entity_id"),
+		/** Whether the attempt succeeded or was refused. A denial is evidence. */
+		outcome: t.text("outcome").notNull().default("success").$type<"success" | "denied">(),
+		/** State before and after the action. Shape is per-action. */
+		oldValue: t.jsonb("old_value").$type<unknown>(),
+		newValue: t.jsonb("new_value").$type<unknown>(),
+		/** Why the attempt was refused, for denials. */
+		reason: t.text("reason"),
 		metadata: t.jsonb("metadata").$type<Record<string, unknown>>(),
 		createdAt: t.timestamp("created_at").notNull().defaultNow(),
 	}),
-	t => [index("audit_logs_actor_id_idx").on(t.actorId)]
+	t => [
+		index("audit_logs_actor_id_idx").on(t.actorId),
+		// The read endpoint is strictly reverse-chronological.
+		index("audit_logs_created_at_idx").on(t.createdAt),
+	]
 )
 
 export const notifications = createTable(
@@ -430,6 +499,7 @@ export const relations = defineRelations(
 		accounts,
 		todos,
 		tickets,
+		idempotencyKeys,
 		roles,
 		permissions,
 		userRoles,
@@ -631,6 +701,7 @@ export const schema = Object.assign(
 		verifications,
 		todos,
 		tickets,
+		idempotencyKeys,
 		roles,
 		permissions,
 		userRoles,

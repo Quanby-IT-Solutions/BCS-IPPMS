@@ -68,6 +68,18 @@ export const PERMISSION_NAMES = [
 	"divisions:*",
 	// Users (users:read / users:manage preserved from the original catalog)
 	"users:read",
+	// Directory PII is split from `users:read`.
+	//
+	// `users:read` grants operational reads — the user list with names and
+	// roles, and support-ticket triage. It used to also yield every
+	// email address, so granting someone ticket triage handed them the complete
+	// email directory as a side effect.
+	//
+	// Note the naming: `users:read-directory` is deliberately NOT
+	// `users:directory-read`, because the wildcard convention matches on the
+	// segment before the colon. A `users:*` holder still gets it, which is
+	// intended — that wildcard means "everything about users".
+	"users:read-directory",
 	"users:create",
 	"users:update",
 	"users:delete",
@@ -167,8 +179,7 @@ export const PERMISSION_NAMES = [
 	"analytics:read",
 	"analytics:*",
 	"calendar:read",
-	"calendar:*",
-] as const
+	"calendar:*",] as const
 
 /** Zod enum validating a permission name. */
 export const PermissionNameSchema = z.enum(PERMISSION_NAMES)
@@ -251,6 +262,9 @@ export const PERMISSION_CATALOG: readonly PermissionMeta[] = [
 	]),
 	...definePermissions("Administration", "Users", "users", [
 		"read",
+		// Email addresses are gated separately from the user list — see the note
+		// on `users:read-directory` in PERMISSION_NAMES.
+		"read-directory",
 		"create",
 		"update",
 		"delete",

@@ -32,6 +32,7 @@ import {
 } from "@/core/components/ui/empty"
 import { Skeleton } from "@/core/components/ui/skeleton"
 import { useApprovalInboxQuery } from "@/features/approvals/api/approvals.hooks"
+import { useIsQueryLoading } from "@/services/tanstack-query/use-query-loading"
 import { canAccess, type AccessProfile } from "@/features/dashboard/lib/access"
 import { getAccessibleNavItems } from "@/features/dashboard/lib/nav-items"
 import { useRolesQuery, useUsersQuery } from "@/features/user-management/api/rbac.hooks"
@@ -65,6 +66,10 @@ export function DashboardOverview({ user, access }: DashboardOverviewProps) {
 	const users = useUsersQuery()
 	const roles = useRolesQuery()
 	const inbox = useApprovalInboxQuery({ enabled: canReadApprovals })
+
+	// The persisted-cache restore pins `fetchStatus` to `idle`, so raw
+	// `isLoading` disagrees with the server render. See `useIsQueryLoading`.
+	const isQueryLoading = useIsQueryLoading()
 
 	const firstName = user.name?.trim().split(/\s+/)[0] || "there"
 	const pendingApprovals = inbox.data?.length
@@ -111,7 +116,7 @@ export function DashboardOverview({ user, access }: DashboardOverviewProps) {
 						label="Users"
 						value={users.data?.length}
 						hint="Across all roles"
-						isLoading={users.isLoading}
+						isLoading={isQueryLoading(users)}
 						isError={users.isError}
 					/>
 				) : null}
@@ -121,7 +126,7 @@ export function DashboardOverview({ user, access }: DashboardOverviewProps) {
 						label="Roles"
 						value={roles.data?.length}
 						hint="Defined in the workspace"
-						isLoading={roles.isLoading}
+						isLoading={isQueryLoading(roles)}
 						isError={roles.isError}
 					/>
 				) : null}

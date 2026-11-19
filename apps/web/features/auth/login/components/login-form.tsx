@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useForm } from "@tanstack/react-form"
@@ -15,13 +16,17 @@ import {
 	FieldSeparator,
 } from "@/core/components/ui/field"
 import { Input } from "@/core/components/ui/input"
+import { useRateLimitCountdown } from "@/core/hooks/use-rate-limit-countdown"
+import { parseRateLimitError } from "@/core/lib/rate-limit-utils"
 import { cn } from "@/core/lib/utils"
 import { PasswordInput } from "@/features/auth/components/password-input"
+import { RateLimitBanner } from "@/features/auth/components/rate-limit-banner"
 import { SocialLoginButtons } from "@/features/auth/components/social-login-buttons"
 import { TermsPrivacyNote } from "@/features/auth/components/terms-privacy-note"
 import { env } from "@/env"
+import { ResendVerificationForm } from "@/features/auth/verify-email/components/resend-verification-form"
 
-import { useLoginMutation } from "../api/login.hooks"
+import { UnverifiedEmailError, useLoginMutation } from "../api/login.hooks"
 import { LoginSchema } from "../api/login.schema"
 
 // Seeded dev accounts (kept in sync with packages/db/src/seed.ts). Shared
@@ -39,10 +44,16 @@ const DEV_ACCOUNTS = [
 const DEV_PASSWORD = "password123"
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
+	const [showResend, setShowResend] = useState(false)
 	const { mutateAsync: login, isPending, isError, error } = useLoginMutation()
 
 	// Guard: never expose quick dev access in production, even if the flag leaks.
 	const showDevLogin = env.NEXT_PUBLIC_ENABLE_DEV_LOGIN && env.NODE_ENV !== "production"
+	const isUnverified = error instanceof UnverifiedEmailError
+	const rateLimit = parseRateLimitError(error)
+	const { secondsLeft, isActive } = useRateLimitCountdown(
+		rateLimit.isRateLimit ? rateLimit.retryAfter : null
+	)
 
 	const form = useForm({
 		defaultValues: {
@@ -53,7 +64,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 			onSubmit: LoginSchema,
 		},
 		onSubmit: async ({ value }) => {
-			await login(value)
+			try {
+				await login(value)
+			} catch {
+				// The mutation stores the error, and the banner reads that state.
+				// Catching keeps TanStack Form's handleSubmit() from rejecting,
+				// which would be an unhandled rejection on the form's submit handler.
+			}
 		},
 	})
 
@@ -87,10 +104,36 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 								</p>
 							</div>
 
-							{isError && (
-								<div className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 rounded-xl border p-3.5 text-xs font-medium">
+							{isError && isUnverified && (
+								<div
+									role="alert"
+									data-testid="login-unverified-error"
+									className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 rounded-xl border p-3.5 text-xs font-medium flex flex-col items-start gap-1"
+								>
+									<span>Please verify your email before signing in.</span>
+									<Button
+										type="button"
+										variant="link"
+										className="text-destructive h-auto px-0 text-xs font-semibold"
+										onClick={() => setShowResend(true)}
+									>
+										Resend verification email
+									</Button>
+								</div>
+							)}
+
+							{isError && !isUnverified && rateLimit.isRateLimit && (
+								<RateLimitBanner message={rateLimit.message} secondsLeft={secondsLeft} />
+							)}
+
+							{isError && !isUnverified && !rateLimit.isRateLimit && (
+								<div role="alert" data-testid="login-error" className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 rounded-xl border p-3.5 text-xs font-medium">
 									{error instanceof Error ? error.message : "An unexpected error occurred"}
 								</div>
+							)}
+
+							{showResend && isUnverified && (
+								<ResendVerificationForm prefillEmail={(error as UnverifiedEmailError).email} />
 							)}
 
 							<form.Field
@@ -139,7 +182,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 													Password
 												</FieldLabel>
 												<Link
-													href="#"
+													href="/forgot-password"
 													className={cn(
 														buttonVariants({ size: "sm", variant: "link" }),
 														"text-primary ml-auto h-auto px-0 text-xs font-semibold hover:no-underline"
@@ -169,10 +212,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 							<Field className="mt-1">
 								<Button
 									type="submit"
-									disabled={isPending}
+									disabled={isPending || isActive}
 									className="bg-primary hover:bg-primary/95 shadow-primary/20 w-full rounded-xl py-5 text-sm font-extrabold text-white shadow-md hover:cursor-pointer"
 								>
-									{isPending ? (
+									{isActive ? (
+										<span>Try again in {secondsLeft}s</span>
+									) : isPending ? (
 										<span className="flex items-center gap-2">
 											<svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none">
 												<circle

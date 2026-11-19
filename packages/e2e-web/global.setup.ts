@@ -1,70 +1,35 @@
-import { expect, request, test as setup } from "@playwright/test"
+import { expect, test as setup } from "@playwright/test"
 
-import { AUTH_FILE } from "./constants"
+import { ADMIN_AUTH_FILE, AUTH_FILE, USER_B_AUTH_FILE } from "./constants"
+import { installSessionReadRecovery, signInAs, trySignInAs } from "./fixtures"
 
-const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "test@gmail.com"
-const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Password123"
-const TEST_NAME = process.env.E2E_TEST_NAME ?? "E2E Test User"
+// A 429 retry waits up to 15s, twice. The default 30s test timeout cannot
+// hold that plus the two sign-ins in this file.
+setup.setTimeout(90_000)
 
-// Backend auth API — trailing slash is required for correct URL resolution with relative paths
-const AUTH_API = process.env.E2E_AUTH_API_URL ?? "http://localhost:3000/api/v1/auth/"
-
-// Web app origin — must be in BETTER_AUTH_TRUSTED_ORIGINS
-const WEB_ORIGIN = process.env.BASE_URL ?? "http://localhost:3001"
-
+/**
+ * Establishes the shared authenticated session the `chromium-authenticated`
+ * project reuses.
+ *
+ * userA and userB come from `pnpm db:seed:e2e` (pre-verified, no role).
+ * Sign-in goes through the shared fixture, which retries a 429 from
+ * `x-retry-after` and fails immediately on 401 or 403 EMAIL_NOT_VERIFIED.
+ * It does not register an account.
+ */
 setup("authenticate", async ({ page }) => {
-	// ── Call the backend auth API directly — more reliable than form interaction ──
-	const api = await request.newContext({
-		baseURL: AUTH_API,
-		extraHTTPHeaders: {
-			"Content-Type": "application/json",
-			// Better Auth checks Origin against trustedOrigins for CSRF protection
-			"Origin": WEB_ORIGIN,
-		},
-	})
+	installSessionReadRecovery(page)
+	await signInAs(page, "userA")
 
-	// 1. Try sign-in with the test credentials
-	let authRes = await api.post("sign-in/email", {
-		data: { email: TEST_EMAIL, password: TEST_PASSWORD },
-	})
+	const cookies = await page.context().cookies()
+	expect(
+		cookies.some(c => c.name === "better-auth.session_token"),
+		"sign-in returned no session cookie"
+	).toBe(true)
 
-	// 2. If sign-in failed (user doesn't exist yet), register the account first
-	if (!authRes.ok()) {
-		const signUpRes = await api.post("sign-up/email", {
-			data: { email: TEST_EMAIL, password: TEST_PASSWORD, name: TEST_NAME },
-		})
-
-		if (!signUpRes.ok()) {
-			const body = await signUpRes.text()
-			throw new Error(`[e2e setup] Failed to create test account: ${signUpRes.status()} – ${body}`)
-		}
-
-		// Sign in after successful registration
-		authRes = await api.post("sign-in/email", {
-			data: { email: TEST_EMAIL, password: TEST_PASSWORD },
-		})
-
-		if (!authRes.ok()) {
-			const body = await authRes.text()
-			throw new Error(`[e2e setup] Failed to sign in after registration: ${authRes.status()} – ${body}`)
-		}
-	}
-
-	// ── Transfer auth cookies from API context → browser context ───────────────
-	const { cookies } = await api.storageState()
-
-	if (cookies.length === 0) {
-		throw new Error("[e2e setup] Sign-in succeeded but no session cookies were returned")
-	}
-
-	const hasSessionCookie = cookies.some(c => c.name === "better-auth.session_token")
-	expect(hasSessionCookie).toBe(true)
-
-	await page.context().addCookies(cookies)
-
-	// Navigate to the home page so Next.js validates the session server-side
+	// Navigate so Next.js validates the session server-side — a cookie the
+	// server rejects would otherwise surface as a confusing failure in every
+	// authenticated test rather than here.
 	await page.goto("/")
-
 	await expect(page.locator("p").filter({ hasText: /^Hello\s/ })).toBeVisible()
 
 	await page.goto("/dashboard")
@@ -72,5 +37,39 @@ setup("authenticate", async ({ page }) => {
 
 	// Persist the full browser context (cookies + localStorage) for authenticated tests
 	await page.context().storageState({ path: AUTH_FILE })
-	await api.dispose()
+})
+
+/**
+ * The seeded admin's session, for tests whose screen is permission-gated.
+ *
+ * userA above holds no role, so a create form gated on `posts:create` is
+ * correctly hidden from them — tests needing one were waiting on an input RBAC
+ * was right to hide. Establishing the admin session once here, rather than
+ * signing in inside each such test, keeps the number of auth requests flat:
+ * Better Auth rate-limits per path, and a per-test sign-in makes the suite
+ * slower and less reliable the more of these tests exist.
+ *
+ * `trySignInAs`, not `signInAs`: an environment with no seeded admin is a
+ * legitimate one to run in. The file is left empty and the specs that need it
+ * skip, rather than the whole setup project failing and taking every
+ * authenticated test with it.
+ */
+setup("authenticate as admin", async ({ page }) => {
+	const isAdmin = await trySignInAs(page, "admin")
+
+	if (!isAdmin) {
+		await page.context().clearCookies()
+	}
+
+	await page.context().storageState({ path: ADMIN_AUTH_FILE })
+})
+
+/**
+ * userB, once. Ownership and sign-out specs need a second ordinary user.
+ * Saving the session here keeps those specs off the sign-in endpoint unless
+ * they themselves revoke a session.
+ */
+setup("authenticate as userB", async ({ page }) => {
+	await signInAs(page, "userB")
+	await page.context().storageState({ path: USER_B_AUTH_FILE })
 })

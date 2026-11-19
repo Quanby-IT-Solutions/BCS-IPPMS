@@ -1,10 +1,12 @@
-import { Controller } from "@nestjs/common"
+import { Controller, UseInterceptors } from "@nestjs/common"
 import { Implement } from "@orpc/nest"
 import { implement } from "@orpc/server"
 import { AllowAnonymous, Session, type UserSession } from "@thallesp/nestjs-better-auth"
 
 import { v1 } from "@/config/api-versions.config"
 import { RequirePermissions } from "@/shared/decorators/require-permissions.decorator"
+import { StrictThrottle } from "@/shared/decorators/strict-throttle.decorator"
+import { IdempotencyInterceptor } from "@/shared/interceptors/idempotency.interceptor"
 
 import { TodosService } from "./todos.service"
 
@@ -28,7 +30,9 @@ export class TodosController {
 		})
 	}
 
+	@StrictThrottle()
 	@RequirePermissions("posts:create")
+	@UseInterceptors(IdempotencyInterceptor)
 	@Implement(v1.example.todo.create)
 	async createTodo(
 		@Session()
@@ -39,19 +43,29 @@ export class TodosController {
 		})
 	}
 
+	@StrictThrottle()
 	@RequirePermissions("posts:edit")
+	@UseInterceptors(IdempotencyInterceptor)
 	@Implement(v1.example.todo.update)
-	async updateTodo() {
+	async updateTodo(
+		@Session()
+		session: UserSession
+	) {
 		return implement(v1.example.todo.update).handler(async ({ input }) => {
-			return this.todosService.update({ payload: input })
+			return this.todosService.update({ payload: input, authorId: session.user.id })
 		})
 	}
 
+	@StrictThrottle()
 	@RequirePermissions("posts:delete")
+	@UseInterceptors(IdempotencyInterceptor)
 	@Implement(v1.example.todo.delete)
-	async removeTodo() {
+	async removeTodo(
+		@Session()
+		session: UserSession
+	) {
 		return implement(v1.example.todo.delete).handler(async ({ input }) => {
-			return this.todosService.delete({ id: input.id })
+			return this.todosService.delete({ id: input.id, authorId: session.user.id })
 		})
 	}
 }

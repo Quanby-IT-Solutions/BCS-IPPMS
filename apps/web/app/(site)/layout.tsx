@@ -6,6 +6,14 @@ import { AppSidebar } from "@/features/dashboard/components/app-sidebar"
 import { SiteHeader } from "@/features/dashboard/components/site-header"
 import { getAccess } from "@/features/dashboard/server/get-access"
 
+/**
+ * Authenticated app shell: resolves the session and the caller's access
+ * profile, then renders the sidebar chrome around the page.
+ *
+ * Both reads happen here rather than per page so every route under `(site)`
+ * is gated the same way and the sidebar always has an access profile to
+ * filter navigation with.
+ */
 export default async function SiteLayout({
 	children,
 }: Readonly<{

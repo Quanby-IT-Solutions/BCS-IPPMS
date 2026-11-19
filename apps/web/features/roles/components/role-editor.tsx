@@ -11,6 +11,7 @@ import { Button } from "@/core/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/core/components/ui/field"
 import { Input } from "@/core/components/ui/input"
 import { PermissionMatrix } from "@/features/roles/components/permission-matrix"
+import { useRateLimitToast } from "@/core/hooks/use-rate-limit-toast"
 import {
 	useCreateRoleMutation,
 	useRolesQuery,
@@ -39,6 +40,12 @@ export function RoleEditor({ role, onClose }: RoleEditorProps) {
 	const setRolePermissions = useSetRolePermissionsMutation()
 
 	const isPending = createRole.isPending || updateRole.isPending || setRolePermissions.isPending
+
+	// Live 429 countdown for whichever write in the submit chain hit the limit.
+	const { isActive, secondsLeft } = useRateLimitToast(
+		createRole.error ?? updateRole.error ?? setRolePermissions.error,
+		{ toastId: "rbac-role-form" }
+	)
 
 	async function handleSubmit(event: React.FormEvent) {
 		event.preventDefault()
@@ -138,8 +145,14 @@ export function RoleEditor({ role, onClose }: RoleEditorProps) {
 				<Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
 					Cancel
 				</Button>
-				<Button type="submit" disabled={isPending}>
-					{isPending ? "Saving..." : isEdit ? "Save changes" : "Create role"}
+				<Button type="submit" disabled={isPending || isActive}>
+					{isActive
+						? `Try again in ${secondsLeft}s`
+						: isPending
+							? "Saving..."
+							: isEdit
+								? "Save changes"
+								: "Create role"}
 				</Button>
 			</div>
 		</form>

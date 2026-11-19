@@ -105,7 +105,7 @@ export class DivisionsService {
 		// Active-state changes can affect which divisions a scoped principal may
 		// act within; flush the per-user RBAC cache so resolution re-runs.
 		if (activeChanged) {
-			this.cacheService.clear()
+			await this.cacheService.clear()
 		}
 
 		return this.toDivision(row)
@@ -137,7 +137,7 @@ export class DivisionsService {
 			metadata: { name: row.name, isActive: row.isActive },
 		})
 
-		this.cacheService.clear()
+		await this.cacheService.clear()
 
 		return this.toDivision(row)
 	}

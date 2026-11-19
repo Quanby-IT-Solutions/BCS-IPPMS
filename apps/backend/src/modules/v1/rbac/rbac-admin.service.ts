@@ -32,15 +32,18 @@ import {
 	users,
 } from "@repo/db/schema"
 
-import { AuditService } from "@/common/audit/audit.service"
+import { AUDIT_DOMAIN_RBAC, AuditService } from "@/common/audit/audit.service"
 import { db } from "@/common/database/database.client"
 import { RbacCacheService } from "@/common/rbac/rbac-cache.service"
 import { RbacService } from "@/common/rbac/rbac.service"
 
 const PERMISSION_CATALOG = new Set<string>(PERMISSION_NAMES)
 
-/** Owning module label recorded on RBAC audit events. */
-const AUDIT_MODULE = "rbac"
+/**
+ * Owning module label recorded on RBAC audit events. Aliased to the shared
+ * constant so the two spellings in this file cannot drift apart.
+ */
+const AUDIT_MODULE = AUDIT_DOMAIN_RBAC
 
 @Injectable()
 export class RbacAdminService {
@@ -89,79 +92,131 @@ export class RbacAdminService {
 	}
 
 	async createRole(payload: CreateRoleInput, actorId: string | null = null): Promise<Role> {
-		const [existing] = await db.select().from(roles).where(eq(roles.name, payload.name))
-		if (existing) {
-			throw new ORPCError("CONFLICT", { message: `Role "${payload.name}" already exists` })
-		}
+		// The role row and its audit entry share one transaction, so a role can
+		// never appear without a record of who created it. The uniqueness check
+		// is inside the transaction too: checking outside it would race another
+		// request creating the same name.
+		const roleId = await db.transaction(async tx => {
+			const [existing] = await tx.select().from(roles).where(eq(roles.name, payload.name))
+			if (existing) {
+				throw new ORPCError("CONFLICT", { message: `Role "${payload.name}" already exists` })
+			}
 
-		const [role] = await db
-			.insert(roles)
-			.values({ name: payload.name, description: payload.description ?? null })
-			.returning()
+			const [role] = await tx
+				.insert(roles)
+				.values({ name: payload.name, description: payload.description ?? null })
+				.returning()
 
-		if (!role) {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Role could not be created" })
-		}
+			if (!role) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Role could not be created" })
+			}
 
-		// Optional initial permission set from the catalog.
-		if (payload.permissions !== undefined) {
-			await this.replaceRolePermissions(role.id, payload.permissions)
-			// New role grants nobody until assigned, but keep cache consistent.
-			this.cacheService.clear()
-		}
+			await this.auditService.record(
+				{
+					domain: AUDIT_DOMAIN_RBAC,
+					action: "role.create",
+					actorId,
+					targetType: "role",
+					targetId: String(role.id),
+					oldValue: null,
+					newValue: { name: role.name, description: role.description },
+				},
+				tx
+			)
 
-		await this.auditService.record({
-			actorId,
-			action: "role.created",
-			module: AUDIT_MODULE,
-			entityType: "role",
-			entityId: role.id,
-			metadata: { name: role.name, permissions: payload.permissions ?? [] },
+			return role.id
 		})
 
-		return this.buildRole(role.id)
+		// Optional initial permission set from the catalog. Applied after the
+		// role exists, and audited separately for the same reason as updateRole.
+		if (payload.permissions !== undefined) {
+			await this.replaceRolePermissions(roleId, payload.permissions)
+			// New role grants nobody until assigned, but keep cache consistent.
+			await this.cacheService.clear()
+
+			await this.auditService.record({
+				actorId,
+				action: "role.permissions_set",
+				module: AUDIT_MODULE,
+				entityType: "role",
+				entityId: roleId,
+				newValue: { permissions: Array.from(new Set(payload.permissions)).sort() },
+				metadata: { name: payload.name, via: "role.create" },
+			})
+		}
+
+		return this.buildRole(roleId)
 	}
 
 	async updateRole(payload: UpdateRoleRequest, actorId: string | null = null): Promise<Role> {
 		const role = await this.getRoleRowOrThrow(payload.id)
 
 		if (role.name === ADMIN_ROLE && payload.name !== undefined && payload.name !== ADMIN_ROLE) {
+			// A denial is evidence: record the refused attempt, then reject.
+			await this.auditService.record({
+				domain: AUDIT_DOMAIN_RBAC,
+				action: "role.update",
+				outcome: "denied",
+				actorId,
+				targetType: "role",
+				targetId: String(role.id),
+				oldValue: { name: role.name },
+				newValue: { name: payload.name },
+				reason: "The Admin role cannot be renamed",
+			})
 			throw new ORPCError("FORBIDDEN", { message: "The Admin role cannot be renamed" })
 		}
 
-		if (payload.name !== undefined && payload.name !== role.name) {
-			const [clash] = await db.select().from(roles).where(eq(roles.name, payload.name))
-			if (clash) {
-				throw new ORPCError("CONFLICT", { message: `Role "${payload.name}" already exists` })
+		await db.transaction(async tx => {
+			if (payload.name !== undefined && payload.name !== role.name) {
+				const [clash] = await tx.select().from(roles).where(eq(roles.name, payload.name))
+				if (clash) {
+					throw new ORPCError("CONFLICT", { message: `Role "${payload.name}" already exists` })
+				}
 			}
-		}
 
-		await db
-			.update(roles)
-			.set({
+			const next = {
 				name: payload.name ?? role.name,
 				description: payload.description !== undefined ? payload.description : role.description,
-				updatedAt: new Date(),
-			})
-			.where(eq(roles.id, role.id))
+			}
 
-		// Optional wholesale permission replacement (same semantics as setPermissions).
+			await tx
+				.update(roles)
+				.set({ ...next, updatedAt: new Date() })
+				.where(eq(roles.id, role.id))
+
+			await this.auditService.record(
+				{
+					domain: AUDIT_DOMAIN_RBAC,
+					action: "role.update",
+					actorId,
+					targetType: "role",
+					targetId: String(role.id),
+					oldValue: { name: role.name, description: role.description },
+					newValue: next,
+				},
+				tx
+			)
+		})
+
+		// Optional wholesale permission replacement (same semantics as
+		// setRolePermissions). Audited as its own event rather than folded into
+		// the role.update entry above: it changes what every holder of the role
+		// can do, which is a distinct fact from renaming the role.
 		if (payload.permissions !== undefined) {
 			await this.replaceRolePermissions(role.id, payload.permissions)
-			this.cacheService.clear()
-		}
+			await this.cacheService.clear()
 
-		await this.auditService.record({
-			actorId,
-			action: "role.updated",
-			module: AUDIT_MODULE,
-			entityType: "role",
-			entityId: role.id,
-			metadata: {
-				name: payload.name ?? role.name,
-				permissionsReplaced: payload.permissions !== undefined,
-			},
-		})
+			await this.auditService.record({
+				actorId,
+				action: "role.permissions_set",
+				module: AUDIT_MODULE,
+				entityType: "role",
+				entityId: role.id,
+				newValue: { permissions: Array.from(new Set(payload.permissions)).sort() },
+				metadata: { name: payload.name ?? role.name, via: "role.update" },
+			})
+		}
 
 		return this.buildRole(role.id)
 	}
@@ -174,7 +229,7 @@ export class RbacAdminService {
 
 		await this.replaceRolePermissions(role.id, payload.permissions)
 
-		this.cacheService.clear()
+		await this.cacheService.clear()
 
 		await this.auditService.record({
 			actorId,
@@ -195,11 +250,21 @@ export class RbacAdminService {
 		const role = await this.getRoleRowOrThrow(id)
 
 		if (role.name === ADMIN_ROLE) {
+			await this.auditService.record({
+				domain: AUDIT_DOMAIN_RBAC,
+				action: "role.delete",
+				outcome: "denied",
+				actorId,
+				targetType: "role",
+				targetId: String(role.id),
+				oldValue: { name: role.name },
+				reason: "The Admin role cannot be deleted",
+			})
 			throw new ORPCError("FORBIDDEN", { message: "The Admin role cannot be deleted" })
 		}
 
 		await db.delete(roles).where(eq(roles.id, role.id))
-		this.cacheService.clear()
+		await this.cacheService.clear()
 
 		await this.auditService.record({
 			actorId,
@@ -235,7 +300,20 @@ export class RbacAdminService {
 	}
 
 	// ---------------------------------------------------------------- users
-	async listUsers(): Promise<UserWithRoles[]> {
+	/**
+	 * List users.
+	 *
+	 * `includeDirectory` decides whether email addresses are returned. Holding
+	 * `users:read` used to yield the complete email directory, so granting
+	 * someone support-ticket triage (also on `users:read`) handed them every
+	 * address as a side effect.
+	 *
+	 * The design call: the endpoint OMITS the emails rather than returning 403.
+	 * A 403 would break the user-management screen entirely for triage staff
+	 * who legitimately need to see who exists and what roles they hold; the
+	 * useful part of the list survives without the PII.
+	 */
+	async listUsers(includeDirectory: boolean): Promise<UserWithRoles[]> {
 		const userRows = await db
 			.select({
 				id: users.id,
@@ -264,7 +342,10 @@ export class RbacAdminService {
 		return userRows.map(user => ({
 			id: user.id,
 			name: user.name,
-			email: user.email,
+			// Empty string, not the address, when the caller lacks the directory
+			// permission. The field stays present so the contract is unchanged
+			// and clients need no conditional handling.
+			email: includeDirectory ? user.email : "",
 			roles: (rolesByUser.get(user.id) ?? []).sort(),
 			isActive: user.isActive,
 			divisionId: user.divisionId ?? null,
@@ -354,7 +435,7 @@ export class RbacAdminService {
 		})
 
 		// New user has no cache entry yet, but invalidate defensively.
-		this.cacheService.invalidate(userId)
+		await this.cacheService.invalidate(userId)
 
 		await this.auditService.record({
 			actorId,
@@ -396,7 +477,7 @@ export class RbacAdminService {
 			})
 			.where(eq(users.id, user.id))
 
-		this.cacheService.invalidate(user.id)
+		await this.cacheService.invalidate(user.id)
 
 		await this.auditService.record({
 			actorId,
@@ -427,7 +508,7 @@ export class RbacAdminService {
 
 		// Critical: drop the cached permission set so the new active flag is
 		// enforced by the RbacGuard on the very next request.
-		this.cacheService.invalidate(user.id)
+		await this.cacheService.invalidate(user.id)
 
 		await this.auditService.record({
 			actorId,
@@ -441,32 +522,19 @@ export class RbacAdminService {
 		return this.buildUser(user.id)
 	}
 
+	// Audit is NOT written here: rbacService.assignRole records `role.assign`
+	// inside the same transaction as the grant, along with the privilege-escalation
+	// guard. Writing a second entry here would double-count every assignment.
 	async assignUserRole(payload: AssignRoleRequest, actorId: string | null = null) {
-		await this.rbacService.assignRole(payload.userId, payload.roleName)
-
-		await this.auditService.record({
-			actorId,
-			action: "user.role_assigned",
-			module: AUDIT_MODULE,
-			entityType: "user",
-			entityId: payload.userId,
-			metadata: { roleName: payload.roleName },
-		})
+		await this.rbacService.assignRole(payload.userId, payload.roleName, actorId)
 
 		return { success: true, userId: payload.userId, roleName: payload.roleName }
 	}
 
+	// See assignUserRole: rbacService.removeRole owns the audit entry and the
+	// last-Admin protection, both inside the revoking transaction.
 	async removeUserRole(payload: RemoveRoleRequest, actorId: string | null = null) {
-		await this.rbacService.removeRole(payload.userId, payload.roleName)
-
-		await this.auditService.record({
-			actorId,
-			action: "user.role_removed",
-			module: AUDIT_MODULE,
-			entityType: "user",
-			entityId: payload.userId,
-			metadata: { roleName: payload.roleName },
-		})
+		await this.rbacService.removeRole(payload.userId, payload.roleName, actorId)
 
 		return { success: true, userId: payload.userId, roleName: payload.roleName }
 	}
@@ -498,7 +566,7 @@ export class RbacAdminService {
 			.where(eq(users.id, payload.userId))
 
 		// Division drives row-level scoping; invalidate just this user's cache.
-		this.cacheService.invalidate(payload.userId)
+		await this.cacheService.invalidate(payload.userId)
 
 		await this.auditService.record({
 			actorId,

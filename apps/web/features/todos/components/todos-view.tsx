@@ -23,28 +23,77 @@ import {
 } from "@/core/components/ui/empty"
 import { Input } from "@/core/components/ui/input"
 import { Skeleton } from "@/core/components/ui/skeleton"
-import { canAccess, type AccessProfile } from "@/features/dashboard/lib/access"
-import { useCreateTodoMutation, useTodosQuery } from "@/features/todos/api/todos.hooks"
+import { useRateLimitToast } from "@/core/hooks/use-rate-limit-toast"
+import { ApiError } from "@/core/lib/api-error"
+import { useIsQueryLoading } from "@/services/tanstack-query/use-query-loading"
+import {
+	permissionAvailability,
+	type AccessProfile,
+	type PermissionAvailability,
+} from "@/features/dashboard/lib/access"
+import {
+	useCreateTodoMutation,
+	useTodoReplayErrors,
+	useTodosQuery,
+} from "@/features/todos/api/todos.hooks"
 import { TodoItem } from "@/features/todos/components/todo-item"
 
 interface TodosViewProps {
-	access: AccessProfile
+	access: AccessProfile & { status?: "loaded" | "error" }
+}
+
+const CREATE_FIELD_COPY: Record<PermissionAvailability, string> = {
+	allowed: "New todo title",
+	denied: "You lack posts:create",
+	unavailable: "Permissions could not be loaded",
 }
 
 export function TodosView({ access }: TodosViewProps) {
-	const canCreate = canAccess(access, { requiredPermission: "posts:create" })
-	const canEdit = canAccess(access, { requiredPermission: "posts:edit" })
-	const canDelete = canAccess(access, { requiredPermission: "posts:delete" })
+	const createState = permissionAvailability(access, { requiredPermission: "posts:create" })
+	const canCreate = createState === "allowed"
+	const canEdit = permissionAvailability(access, { requiredPermission: "posts:edit" }) === "allowed"
+	const canDelete =
+		permissionAvailability(access, { requiredPermission: "posts:delete" }) === "allowed"
 
-	const { data: todos, isLoading, isError, error } = useTodosQuery()
+	const todosQuery = useTodosQuery()
+	const { data: todos, isError, error } = todosQuery
+
+	// The persisted-cache restore pins `fetchStatus` to `idle`, so raw
+	// `isLoading` disagrees with the server render. See `useIsQueryLoading`.
+	const isQueryLoading = useIsQueryLoading()
+
 	const createTodo = useCreateTodoMutation()
+	const replay = useTodoReplayErrors()
 	const [title, setTitle] = useState("")
+
+	// Live 429 countdown for the create action. Only the Add control is disabled
+	// during the server-advertised retry window; the toast text ticks each second.
+	const createRateLimit = useRateLimitToast(createTodo.error, { toastId: "todo-create-rate-limit" })
+
+	// A mutation paused by `networkMode: "online"` stays `isPending` for the whole
+	// offline session. Only treat an actively in-flight (non-paused) submission as
+	// "submitting" so the user can keep queuing todos while disconnected.
+	const isSubmitting = createTodo.isPending && !createTodo.isPaused
 
 	function handleCreate(event: React.FormEvent) {
 		event.preventDefault()
+		if (createRateLimit.isActive) return
 		const trimmed = title.trim()
 		if (!trimmed) return
-		createTodo.mutate({ title: trimmed, completed: false }, { onSuccess: () => setTitle("") })
+		// Clear the input immediately; the optimistic row appears in the same tick.
+		setTitle("")
+		createTodo.mutate(
+			{ title: trimmed, completed: false },
+			{
+				onError: error => {
+					// Restore the draft when the create was rejected by the rate limiter so
+					// the user's entered title survives the 429 countdown (Core Flow 6).
+					if (error instanceof ApiError && error.status === 429) {
+						setTitle(prev => (prev.trim() ? prev : trimmed))
+					}
+				},
+			}
+		)
 	}
 
 	return (
@@ -60,9 +109,15 @@ export function TodosView({ access }: TodosViewProps) {
 					<CardTitle className="text-base">Your access</CardTitle>
 					<CardDescription>Effective permissions on the posts resource</CardDescription>
 					<div className="flex flex-wrap gap-1 pt-1">
-						<PermBadge label="create" granted={canCreate} />
-						<PermBadge label="edit" granted={canEdit} />
-						<PermBadge label="delete" granted={canDelete} />
+						{createState === "unavailable" ? (
+							<p className="text-muted-foreground text-xs">Permissions could not be loaded</p>
+						) : (
+							<>
+								<PermBadge label="create" granted={canCreate} />
+								<PermBadge label="edit" granted={canEdit} />
+								<PermBadge label="delete" granted={canDelete} />
+							</>
+						)}
 					</div>
 				</CardHeader>
 				<CardContent>
@@ -70,11 +125,15 @@ export function TodosView({ access }: TodosViewProps) {
 						<Input
 							value={title}
 							onChange={e => setTitle(e.target.value)}
-							placeholder={canCreate ? "New todo title" : "You lack posts:create"}
-							disabled={!canCreate || createTodo.isPending}
+							placeholder={CREATE_FIELD_COPY[createState]}
+							disabled={!canCreate}
 						/>
-						<Button type="submit" disabled={!canCreate || createTodo.isPending}>
-							{createTodo.isPending ? "Adding..." : "Add"}
+						<Button type="submit" disabled={!canCreate || createRateLimit.isActive}>
+							{createRateLimit.isActive
+								? `Try again in ${createRateLimit.secondsLeft}s`
+								: isSubmitting
+									? "Adding..."
+									: "Add"}
 						</Button>
 					</form>
 					{createTodo.isError ? (
@@ -82,11 +141,20 @@ export function TodosView({ access }: TodosViewProps) {
 							{createTodo.error instanceof Error ? createTodo.error.message : "Create failed"}
 						</p>
 					) : null}
+					{replay.hasErrors ? (
+						<p
+							className="text-destructive pt-2 text-xs"
+							role="alert"
+							data-testid="todo-replay-error"
+						>
+							{replay.message}
+						</p>
+					) : null}
 				</CardContent>
 			</Card>
 
 			<div className="flex flex-col gap-2">
-				{isLoading ? (
+				{isQueryLoading(todosQuery) ? (
 					<>
 						<Skeleton className="h-12 w-full" />
 						<Skeleton className="h-12 w-full" />

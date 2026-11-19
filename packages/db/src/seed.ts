@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI entrypoint: stdout/stderr is this script's only UI. */
 import "dotenv/config"
 
 import { randomBytes, scryptSync } from "node:crypto"
@@ -41,6 +42,15 @@ import {
 	userRoles,
 	users,
 } from "./schema.js"
+import {
+	ALLOW_REMOTE_SEED_ENV,
+	assertSeedAllowed,
+	FORCE_PASSWORD_FLAG,
+	hasForcePasswordFlag,
+	resolveSeedPassword,
+	SeedRefusedError,
+	shouldWritePassword,
+} from "./seed-guard.js"
 
 async function hashPassword(password: string): Promise<string> {
 	const saltHex = randomBytes(16).toString("hex")
@@ -87,13 +97,25 @@ async function seedDatabase() {
 		throw new Error("DATABASE_URL environment variable is not set")
 	}
 
+	// Refuse production (and any non-local database) BEFORE opening a pool
+	// or writing a single row. Throws SeedRefusedError -> non-zero exit below.
+	assertSeedAllowed({
+		nodeEnv: process.env.NODE_ENV,
+		databaseUrl: connectionString,
+		allowRemote: process.env[ALLOW_REMOTE_SEED_ENV] === "true",
+	})
+
+	const forcePassword = hasForcePasswordFlag(process.argv.slice(2))
+	const { password: seedPassword, generated: passwordWasGenerated } = resolveSeedPassword(
+		process.env.SEED_ADMIN_PASSWORD
+	)
+
 	const pool = new Pool({ connectionString })
 	const db = drizzle({ client: pool, schema })
 	const now = new Date()
 	const day = 24 * 60 * 60 * 1000
 	const daysFromNow = (n: number) => new Date(now.getTime() + n * day)
 	const daysAgo = (n: number) => new Date(now.getTime() - n * day)
-	const seedPassword = "password123"
 	const hashedSeedPassword = await hashPassword(seedPassword)
 
 	// `.returning()` yields an array; under noUncheckedIndexedAccess the first
@@ -380,6 +402,7 @@ async function seedDatabase() {
 		"posts:delete": "Delete posts",
 		"posts:*": "All actions on posts",
 		"users:read": "Read user profiles",
+		"users:read-directory": "Read user email addresses (directory PII)",
 		"users:manage": "Manage users",
 	}
 
@@ -426,7 +449,13 @@ async function seedDatabase() {
 		}
 	})
 
-	// Role -> permission names. Admin omitted: granted via role-name short-circuit.
+	// Role -> permission names. Admin omitted: granted via role-name
+	// short-circuit, which is also how it picks up `users:read-directory`
+	// without a migration — no admin loses access.
+	//
+	// Manager deliberately does NOT get `users:read-directory`. That is the
+	// point of the split: it can triage tickets and see who exists, without
+	// holding the complete email directory.
 	const rolePermissionNames: Partial<Record<SeedRoleName, PermissionName[]>> = {
 		Manager: ["posts:*", "users:read"],
 		User: ["posts:read"],
@@ -507,6 +536,7 @@ async function seedDatabase() {
 
 	// Physical file attachments to write under the storage root after commit.
 	const filePayloads: Array<{ storageKey: string; content: string }> = []
+	let passwordsWritten = false
 
 	try {
 		await db.transaction(async tx => {
@@ -548,18 +578,36 @@ async function seedDatabase() {
 					})
 			}
 
+			// Re-running the seeder must NOT rotate credentials that already
+			// exist — only an explicit --force-password does that. New accounts still
+			// get the resolved password on the INSERT path.
+			const existingCredentialRows = await tx
+				.select({ accountId: accounts.accountId })
+				.from(accounts)
+				.where(
+					and(eq(accounts.providerId, "credential"), inArray(accounts.accountId, seededUserIds))
+				)
+			const existingCredentialIds = new Set(existingCredentialRows.map(row => row.accountId))
+
 			for (const account of seedCredentialAccounts) {
+				const writePassword = shouldWritePassword({
+					accountExists: existingCredentialIds.has(account.accountId),
+					forcePassword,
+				})
+
 				await tx
 					.insert(accounts)
 					.values(account)
 					.onConflictDoUpdate({
 						target: [accounts.providerId, accounts.accountId],
-						set: {
-							userId: account.userId,
-							password: account.password,
-							updatedAt: now,
-						},
+						set: writePassword
+							? { userId: account.userId, password: account.password, updatedAt: now }
+							: { userId: account.userId, updatedAt: now },
 					})
+
+				if (writePassword) {
+					passwordsWritten = true
+				}
 			}
 
 			for (const role of seedRoles) {
@@ -1163,19 +1211,30 @@ async function seedDatabase() {
 			await writeFile(join(storageRoot, payload.storageKey), payload.content)
 		}
 
+		// The password is printed ONLY when this run generated it AND actually
+		// wrote it. An operator-supplied SEED_ADMIN_PASSWORD is never echoed, and
+		// a preserved existing password is not ours to disclose.
+		const credentialNote = !passwordsWritten
+			? `Existing seed credentials left untouched (re-run with ${FORCE_PASSWORD_FLAG} to reset them).`
+			: passwordWasGenerated
+				? `Generated seed password (shown once, not stored anywhere): ${seedPassword}`
+				: "Seed password taken from SEED_ADMIN_PASSWORD (not printed)."
+
 		console.log(
 			`Seeded ${seedUsers.length} users, ${seedCredentialAccounts.length} credential accounts, ${seedDivisions.length} divisions, ${seedTodos.length} todos, and ${seedTickets.length} tickets.\n` +
 				`RBAC: ${seedRoles.length} roles, ${seedPermissions.length} permissions, ${rolePermissionCount} role-permission mappings, ${userRoleCount} user-role assignments.\n` +
 				`IPPMS demo: ${demoCounts.workflows} approval workflows, ${demoCounts.projects} projects, ${demoCounts.milestones} milestones, ${demoCounts.tasks} tasks, ${demoCounts.closures} closure, ${demoCounts.requests} approval requests, ${demoCounts.actions} actions, ${demoCounts.files} files, ${demoCounts.notifications} notifications, ${demoCounts.auditLogs} audit logs.\n` +
-				`Storage: file attachments written under ${join(resolveStorageRoot(), "dev-seed")}\n` +
-				`\nDev quick-login accounts (password: ${seedPassword}):\n` +
+				`Storage: file attachments written under ${devSeedDir}\n` +
+				`\nSeeded accounts (all share the seed password):\n` +
 				`  admin@bcs.local        (Admin, global)\n` +
 				`  planner.ops@bcs.local  (Planner, Operations)\n` +
 				`  approver.ops@bcs.local (Approver, Operations)\n` +
 				`  executor.ops@bcs.local (Executor, Operations)\n` +
 				`  planner.rd@bcs.local   (Planner, R&D)\n` +
 				`  approver.rd@bcs.local  (Approver, R&D)\n` +
-				`Default password: ${seedPassword}`
+				`\n${credentialNote}\n` +
+				`For one-click dev login, seed with a known password:\n` +
+				`  SEED_ADMIN_PASSWORD=<password> pnpm db:seed ${FORCE_PASSWORD_FLAG}`
 		)
 	} finally {
 		await pool.end()
@@ -1183,7 +1242,13 @@ async function seedDatabase() {
 }
 
 void seedDatabase().catch(error => {
-	console.error("Database seeding failed.")
-	console.error(error)
+	// A refusal is a deliberate outcome, not a crash: print the actionable
+	// message without a stack trace, but still exit non-zero so CI/scripts stop.
+	if (error instanceof SeedRefusedError) {
+		console.error(error.message)
+	} else {
+		console.error("Database seeding failed.")
+		console.error(error)
+	}
 	process.exitCode = 1
 })

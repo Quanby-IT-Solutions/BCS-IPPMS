@@ -19,6 +19,20 @@ export type {
 	UpdateTodoRequest,
 } from "./modules/v1/examples/todos/todos.schema.js"
 
+// Ticket schemas + inferred types (the web form is wired to these)
+export {
+	TicketSchema,
+	CreateTicketSchema,
+	TicketIdSchema,
+	TicketPrioritySchema,
+	TicketStatusSchema,
+} from "./modules/v1/tickets/tickets.schema.js"
+export type {
+	Ticket,
+	CreateTicketInput,
+	TicketIdInput,
+} from "./modules/v1/tickets/tickets.schema.js"
+
 // RBAC catalog (shared constants, enums, types)
 export * from "./modules/v1/rbac/rbac.catalog.js"
 
@@ -41,6 +55,10 @@ export {
 	UserRoleMutationResponseSchema,
 	AssignUserDivisionRequestSchema,
 	AssignUserDivisionResponseSchema,
+	AuditOutcomeSchema,
+	AuditLogEntrySchema,
+	ListAuditLogRequestSchema,
+	ListAuditLogResponseSchema,
 } from "./modules/v1/rbac/rbac.schema.js"
 export type {
 	Role,
@@ -56,6 +74,10 @@ export type {
 	RemoveRoleRequest,
 	AssignUserDivisionRequest,
 	AssignUserDivisionResponse,
+	AuditOutcome,
+	AuditLogEntry,
+	ListAuditLogRequest,
+	ListAuditLogResponse,
 } from "./modules/v1/rbac/rbac.schema.js"
 
 // Divisions administration contract + schemas

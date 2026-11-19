@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common"
 import { ORPCError } from "@orpc/server"
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 
 import { todos } from "@repo/db/schema"
 
@@ -41,7 +41,21 @@ export class TodosService {
 		return todo
 	}
 
-	async update({ payload }: { payload: UpdateTodoRequest }) {
+	/**
+	 * Update a todo the caller owns.
+	 *
+	 * The `where` matched on `id` alone, so `posts:edit` — a
+	 * permission every signed-in user effectively has — let anyone rewrite
+	 * anyone's row. Ownership is identity-scoped, not permission-scoped:
+	 * holding the permission means you may edit *your* todos.
+	 *
+	 * This two-term `where` is the template's canonical ownership check.
+	 * Filtering in the query rather than fetching-then-comparing matters: a
+	 * read followed by a check can race with a concurrent write, and a
+	 * forbidden response would confirm that the row exists; filtering in the
+	 * query answers 'not found' either way.
+	 */
+	async update({ payload, authorId }: { payload: UpdateTodoRequest; authorId: string }) {
 		const id = payload.id as number
 		const [todo] = await db
 			.update(todos)
@@ -50,15 +64,27 @@ export class TodosService {
 				completed: payload.completed ?? false,
 				updatedAt: new Date(),
 			})
-			.where(eq(todos.id, id))
+			.where(and(eq(todos.id, id), eq(todos.authorId, authorId)))
 			.returning()
-		if (!todo) throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Todo not updated" })
+
+		// Zero rows means the todo does not exist *or* belongs to someone else.
+		// Both answer 404 on purpose: distinguishing them would turn this
+		// endpoint into an oracle for which ids exist.
+		if (!todo) throw new ORPCError("NOT_FOUND", { message: `Todo with ID ${id} not found` })
 		return todo
 	}
 
-	async delete({ id }: { id: TodoIdInput["id"] }) {
+	/** Delete a todo the caller owns. Same ownership rules as {@link update}. */
+	async delete({ id, authorId }: { id: TodoIdInput["id"]; authorId: string }) {
 		const idNum = id as number
-		await db.delete(todos).where(eq(todos.id, idNum))
+		const deleted = await db
+			.delete(todos)
+			.where(and(eq(todos.id, idNum), eq(todos.authorId, authorId)))
+			.returning()
+
+		if (!deleted.length) {
+			throw new ORPCError("NOT_FOUND", { message: `Todo with ID ${idNum} not found` })
+		}
 		return { success: true, id: idNum }
 	}
 }
