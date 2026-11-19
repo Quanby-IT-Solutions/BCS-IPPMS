@@ -3,6 +3,7 @@ import { Global, Module } from "@nestjs/common"
 import { AuditInterceptor } from "@/shared/interceptors/audit.interceptor"
 
 import { AuditService } from "./audit.service"
+import { AuthAuditService } from "./auth-audit.service"
 
 /**
  * Append-only audit trail.
@@ -19,7 +20,10 @@ import { AuditService } from "./audit.service"
  */
 @Global()
 @Module({
-	providers: [AuditService, AuditInterceptor],
+	// AuthAuditService is a provider, not an export: nothing injects it. It
+	// exists to register the auth event sink on init, so instantiating it is
+	// the whole point.
+	providers: [AuditService, AuditInterceptor, AuthAuditService],
 	exports: [AuditService, AuditInterceptor],
 })
 export class AuditModule {}

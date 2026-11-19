@@ -8,6 +8,7 @@ import { createDBClient } from "@repo/db/client"
 import { accounts, sessions, users, verifications } from "@repo/db/schema"
 
 import { isApiDocsEnabled } from "./api-docs.js"
+import { buildAuthHooks } from "./auth-hooks.js"
 import { authLogger } from "./auth-logger.js"
 import { buildAuthPlugins } from "./auth-plugins.js"
 import { AUTH_CLIENT_ADDRESS_HEADER } from "./client-address.js"
@@ -18,7 +19,6 @@ import { buildResetPasswordEmail } from "./mailer/templates/reset-password-email
 import { buildVerificationEmail } from "./mailer/templates/verification-email.js"
 import { createTransport } from "./mailer/transport-factory.js"
 import { parseOriginList } from "./origin-list.js"
-import { passwordPolicyHook } from "./password-policy-guard.js"
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.js"
 import { rateLimitStorage } from "./rate-limit-storage.js"
 import { withSafeDatabaseErrors } from "./safe-database-errors.js"
@@ -450,9 +450,12 @@ export function createAuth() {
 		 * rather than four call sites that can drift. Length is enforced by
 		 * Better Auth itself from the two bounds set on `emailAndPassword`.
 		 */
-		hooks: {
-			before: passwordPolicyHook(),
-		},
+		/**
+		 * Password policy enforcement (item 19) and the authentication audit
+		 * trail (item 18). Composed in `auth-hooks.ts`, which documents why the
+		 * before phase carries two concerns and in which order.
+		 */
+		hooks: buildAuthHooks(),
 	})
 }
 
