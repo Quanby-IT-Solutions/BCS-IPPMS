@@ -94,13 +94,24 @@ overrides:
   # pinning fast-glob 3.3.1, or when upstream ships a fix, and re-run lint
   # after removing it.
   "@next/eslint-plugin-next>fast-glob": "npm:tinyglobby@^0.2.15"
+  # GHSA-g3hv-75wg-m249 (CVE-2026-118764): minimatch denial of service via
+  # globparts amplification. Fixed upstream in 11.0.1. Ranged so the 3.x line
+  # still used by older dev tooling is left alone — it predates the affected
+  # code and bumping it across the 3->9 API break would be gratuitous.
+  "minimatch@>=7 <11.0.1": ">=11.0.1 <12"
+  # GHSA-3g3m-2fjr-6pw4 (CVE-2026-118773): glob AbortSignal cancellation
+  # bypass — an aborted walk kept traversing the filesystem. Fixed upstream in
+  # 14.0.2, which supersedes the local patches this repo carried for 10.5.0 and
+  # 13.0.6 (they made the same one-line `return cb()` fix). Those patch entries
+  # and files are removed with this override: patches only covered the two
+  # versions they pinned, leaving 10.4.5 and 13.0.0 exposed, and pnpm patches
+  # are invisible to advisory scanners.
+  "glob@>=9 <14.0.2": ">=14.0.2 <15"
 
 # Local fixes for advisories with no usable upstream release. Each patch file
 # says what it changes; drop the entry once the dependency ships the fix.
 patchedDependencies:
   deepmerge@4.3.1: patches/deepmerge@4.3.1.patch
-  glob@10.5.0: patches/glob@10.5.0.patch
-  glob@13.0.6: patches/glob@13.0.6.patch
 
 publicHoistPattern:
   - "@ianvs/prettier-plugin-sort-imports"
