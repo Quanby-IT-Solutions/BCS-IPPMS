@@ -2,10 +2,7 @@ import { Injectable } from "@nestjs/common"
 import { ORPCError } from "@orpc/server"
 import { desc, eq } from "drizzle-orm"
 
-import {
-	type ProjectClosure,
-	type SubmitClosureInput,
-} from "@repo/contracts"
+import { type ProjectClosure, type SubmitClosureInput } from "@repo/contracts"
 import { projectClosures, projects } from "@repo/db/schema"
 
 import { AuditService } from "@/common/audit/audit.service"

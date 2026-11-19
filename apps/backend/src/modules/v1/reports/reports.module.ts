@@ -4,8 +4,8 @@ import { AuditModule } from "@/common/audit/audit.module"
 import { DivisionScopeModule } from "@/common/division-scope/division-scope.module"
 import { RbacModule } from "@/common/rbac/rbac.module"
 
-import { ReportsController } from "./reports.controller"
 import { ReportsExportController } from "./reports-export.controller"
+import { ReportsController } from "./reports.controller"
 import { ReportsService } from "./reports.service"
 
 /**

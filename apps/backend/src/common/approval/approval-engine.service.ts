@@ -290,8 +290,7 @@ export class ApprovalEngineService {
 				stepOrder: request.currentStepOrder,
 				actorId: input.actorId,
 				action: input.action,
-				delegateToUserId:
-					input.action === "delegate" ? (input.delegateToUserId ?? null) : null,
+				delegateToUserId: input.action === "delegate" ? (input.delegateToUserId ?? null) : null,
 				note: input.note ?? null,
 			})
 

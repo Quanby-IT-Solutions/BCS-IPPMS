@@ -20,6 +20,7 @@ import { useRateLimitCountdown } from "@/core/hooks/use-rate-limit-countdown"
 import { parseRateLimitError } from "@/core/lib/rate-limit-utils"
 import { cn } from "@/core/lib/utils"
 import { PasswordInput } from "@/features/auth/components/password-input"
+import { PasswordRequirements } from "@/features/auth/components/password-requirements"
 import { RateLimitBanner } from "@/features/auth/components/rate-limit-banner"
 import { SocialLoginButtons } from "@/features/auth/components/social-login-buttons"
 import { TermsPrivacyNote } from "@/features/auth/components/terms-privacy-note"
@@ -154,7 +155,15 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"div"
 												autoComplete="new-password"
 												disabled={isPending}
 											/>
-											{isInvalid && <FieldError errors={field.state.meta.errors} />}
+											{/* The checklist is the primary feedback here; FieldError
+											    would repeat each unmet rule a second time. */}
+											<PasswordRequirements
+												value={field.state.value}
+												context={{
+													email: form.state.values.email,
+													name: form.state.values.name,
+												}}
+											/>
 										</Field>
 									)
 								}}

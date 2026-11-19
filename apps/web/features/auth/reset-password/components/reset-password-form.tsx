@@ -16,6 +16,7 @@ import { useRateLimitCountdown } from "@/core/hooks/use-rate-limit-countdown"
 import { parseRateLimitError } from "@/core/lib/rate-limit-utils"
 import { cn } from "@/core/lib/utils"
 import { PasswordInput } from "@/features/auth/components/password-input"
+import { PasswordRequirements } from "@/features/auth/components/password-requirements"
 import { RateLimitBanner } from "@/features/auth/components/rate-limit-banner"
 
 import { useResetPasswordMutation } from "../api/reset-password.hooks"
@@ -126,7 +127,9 @@ export function ResetPasswordForm({ token, className, ...props }: ResetPasswordF
 												autoComplete="new-password"
 												disabled={isPending}
 											/>
-											{isInvalid && <FieldError errors={field.state.meta.errors} />}
+											{/* The checklist is the primary feedback here; FieldError
+											    would repeat each unmet rule a second time. */}
+											<PasswordRequirements value={field.state.value} />
 										</Field>
 									)
 								}}

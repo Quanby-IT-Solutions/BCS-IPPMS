@@ -1,9 +1,6 @@
 import { z } from "zod"
 
-import {
-	ApprovalActionRecordSchema,
-	ApprovalStepSchema,
-} from "../approvals/approvals.schema.js"
+import { ApprovalActionRecordSchema, ApprovalStepSchema } from "../approvals/approvals.schema.js"
 
 // ============================================================================
 // SHARED

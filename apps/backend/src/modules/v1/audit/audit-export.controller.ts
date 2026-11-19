@@ -65,7 +65,10 @@ export class AuditExportController {
 
 	@RequirePermissions("audit:export")
 	@Get("export")
-	async export(@Query() query: Record<string, unknown>, @Res({ passthrough: false }) res: Response) {
+	async export(
+		@Query() query: Record<string, unknown>,
+		@Res({ passthrough: false }) res: Response
+	) {
 		// Reuse the contract schema so filters coerce/validate identically to the
 		// oRPC list endpoint.
 		const filters = ListAuditLogsQuerySchema.parse(query)

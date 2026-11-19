@@ -281,8 +281,7 @@ export const projectsContract = {
 				method: "POST",
 				path: "/project-closures",
 				summary: "Submit project closure",
-				description:
-					"Close an active project: record evaluation metrics and set status to Closed.",
+				description: "Close an active project: record evaluation metrics and set status to Closed.",
 				tags: ["Projects"],
 			})
 			.input(SubmitClosureSchema)

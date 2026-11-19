@@ -125,8 +125,7 @@ export class ProjectTasksService {
 		const { row, project } = await this.loadAccessibleTask(userId, payload.id)
 		this.projectsService.assertMutable(project)
 
-		const nextAssignee =
-			payload.assigneeId !== undefined ? payload.assigneeId : row.assigneeId
+		const nextAssignee = payload.assigneeId !== undefined ? payload.assigneeId : row.assigneeId
 		if (payload.assigneeId) await this.assertUserExists(payload.assigneeId)
 
 		const [updated] = await db
@@ -136,8 +135,7 @@ export class ProjectTasksService {
 				assigneeId: nextAssignee,
 				dueDate: payload.dueDate !== undefined ? payload.dueDate : row.dueDate,
 				status: payload.status ?? row.status,
-				requirements:
-					payload.requirements !== undefined ? payload.requirements : row.requirements,
+				requirements: payload.requirements !== undefined ? payload.requirements : row.requirements,
 				updatedAt: new Date(),
 			})
 			.where(eq(projectTasks.id, row.id))

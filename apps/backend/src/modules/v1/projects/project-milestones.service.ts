@@ -104,10 +104,7 @@ export class ProjectMilestonesService {
 		return this.toMilestone(updated)
 	}
 
-	async setStatus(
-		userId: string,
-		payload: SetMilestoneStatusRequest
-	): Promise<ProjectMilestone> {
+	async setStatus(userId: string, payload: SetMilestoneStatusRequest): Promise<ProjectMilestone> {
 		const { row, project } = await this.loadAccessibleMilestone(userId, payload.id)
 		this.projectsService.assertMutable(project)
 

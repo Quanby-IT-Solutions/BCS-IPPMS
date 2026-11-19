@@ -104,8 +104,7 @@ export const rbacContract = {
 				method: "GET",
 				path: "/rbac/users",
 				summary: "List users",
-				description:
-					"List all users with their assigned role names, division, and active status.",
+				description: "List all users with their assigned role names, division, and active status.",
 				tags: ["RBAC"],
 			})
 			.output(z.array(UserWithRolesSchema)),

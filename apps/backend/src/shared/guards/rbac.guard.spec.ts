@@ -56,7 +56,11 @@ const buildStableContext = (request: object): ExecutionContext =>
 describe("RbacGuard", () => {
 	let guard: RbacGuard
 	let reflector: { getAllAndOverride: jest.Mock }
-	let rbacService: { hasAllPermissions: jest.Mock; getMissingPermissions: jest.Mock; isActive: jest.Mock }
+	let rbacService: {
+		hasAllPermissions: jest.Mock
+		getMissingPermissions: jest.Mock
+		isActive: jest.Mock
+	}
 	const env = require("@/config/env.config").env as { NODE_ENV: string }
 
 	beforeEach(async () => {

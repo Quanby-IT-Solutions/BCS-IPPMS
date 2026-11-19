@@ -76,7 +76,10 @@ export const CreateApprovalWorkflowSchema = z.object({
 export const UpdateApprovalWorkflowSchema = IdParamSchema.extend({
 	isActive: z.boolean().optional(),
 	// When provided, replaces the entire ordered chain.
-	steps: z.array(ApprovalStepInputSchema).min(1, "At least one approval step is required").optional(),
+	steps: z
+		.array(ApprovalStepInputSchema)
+		.min(1, "At least one approval step is required")
+		.optional(),
 })
 
 export const WorkflowIdSchema = IdParamSchema

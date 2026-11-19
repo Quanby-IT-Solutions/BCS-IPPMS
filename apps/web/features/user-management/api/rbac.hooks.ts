@@ -81,7 +81,6 @@ export function useUsersQuery() {
 	})
 }
 
-
 // -------------------------------------------------------------- mutations
 export function useCreateRoleMutation() {
 	const queryClient = useQueryClient()

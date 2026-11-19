@@ -42,9 +42,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/core/components/ui/table"
-import { RoleEditor } from "@/features/roles/components/role-editor"
 import { useRateLimitToast } from "@/core/hooks/use-rate-limit-toast"
 import { useIsQueryLoading } from "@/services/tanstack-query/use-query-loading"
+import { RoleEditor } from "@/features/roles/components/role-editor"
 import { useDeleteRoleMutation, useRolesQuery } from "@/features/user-management/api/rbac.hooks"
 
 type EditorState = { mode: "list" } | { mode: "create" } | { mode: "edit"; role: Role }

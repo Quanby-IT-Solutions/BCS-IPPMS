@@ -121,7 +121,16 @@ export const UserWithRolesSchema = z.object({
 export const CreateUserSchema = z.object({
 	name: z.string().min(1, "Name is required").max(255, "Name too long"),
 	email: z.string().email("Invalid email").max(255, "Email too long"),
-	password: z.string().min(8, "Password too short").max(128, "Password too long").optional(),
+	/**
+	 * Optional initial password.
+	 *
+	 * These bounds are a transport-level sanity check, not the policy. The
+	 * composition rules live in `@repo/auth/password-policy` and are applied by
+	 * `RbacAdminService.createUser`, which is authoritative — this package is
+	 * imported by browser code and must not depend on the auth package to get
+	 * them. Keep the lower bound in step with `PASSWORD_MIN_LENGTH` there.
+	 */
+	password: z.string().min(12, "Password too short").max(128, "Password too long").optional(),
 	/** Optional role names (from the roles table) to grant on creation. */
 	roleNames: z.array(z.string().min(1)).optional(),
 	/**

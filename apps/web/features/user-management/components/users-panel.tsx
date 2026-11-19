@@ -59,9 +59,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/core/components/ui/table"
-import { useDivisionsQuery } from "@/features/divisions/api/divisions.hooks"
 import { useRateLimitToast } from "@/core/hooks/use-rate-limit-toast"
 import { useIsQueryLoading } from "@/services/tanstack-query/use-query-loading"
+import { useDivisionsQuery } from "@/features/divisions/api/divisions.hooks"
 import {
 	useAssignRoleMutation,
 	useAssignUserDivisionMutation,

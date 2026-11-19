@@ -9,10 +9,7 @@ import type { IncomingHttpHeaders } from "http"
 import { tap, type Observable } from "rxjs"
 
 import { AuditService } from "@/common/audit/audit.service"
-import {
-	AUDIT_ACTION_KEY,
-	type AuditActionMeta,
-} from "@/shared/decorators/audit-action.decorator"
+import { AUDIT_ACTION_KEY, type AuditActionMeta } from "@/shared/decorators/audit-action.decorator"
 
 /** HTTP verbs treated as state-changing for baseline write-path coverage. */
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])

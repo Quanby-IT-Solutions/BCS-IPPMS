@@ -1,13 +1,12 @@
-import { randomUUID } from "node:crypto"
-import { extname } from "node:path"
-import type { ReadStream } from "node:fs"
-
 import {
 	BadRequestException,
 	Injectable,
 	InternalServerErrorException,
 	NotFoundException,
 } from "@nestjs/common"
+import { randomUUID } from "node:crypto"
+import type { ReadStream } from "node:fs"
+import { extname } from "node:path"
 import { ORPCError } from "@orpc/server"
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm"
 
@@ -261,10 +260,7 @@ export class FilesService {
 
 				const ownVisibility = or(
 					and(isNull(files.ownerType), eq(files.uploadedBy, userId)),
-					and(
-						eq(files.ownerType, PROJECT_OWNER_TYPE),
-						inArray(files.ownerId, accessibleProjectIds)
-					)
+					and(eq(files.ownerType, PROJECT_OWNER_TYPE), inArray(files.ownerId, accessibleProjectIds))
 				)
 				if (ownVisibility) conditions.push(ownVisibility)
 			}

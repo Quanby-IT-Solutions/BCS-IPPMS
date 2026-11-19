@@ -4,8 +4,8 @@ import { AuditModule } from "@/common/audit/audit.module"
 import { DivisionScopeModule } from "@/common/division-scope/division-scope.module"
 import { StorageModule } from "@/common/storage/storage.module"
 
-import { FilesController } from "./files.controller"
 import { FilesUploadController } from "./files-upload.controller"
+import { FilesController } from "./files.controller"
 import { FilesService } from "./files.service"
 
 @Module({

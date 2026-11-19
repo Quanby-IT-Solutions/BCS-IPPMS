@@ -179,7 +179,8 @@ export const PERMISSION_NAMES = [
 	"analytics:read",
 	"analytics:*",
 	"calendar:read",
-	"calendar:*",] as const
+	"calendar:*",
+] as const
 
 /** Zod enum validating a permission name. */
 export const PermissionNameSchema = z.enum(PERMISSION_NAMES)
@@ -289,13 +290,7 @@ export const PERMISSION_CATALOG: readonly PermissionMeta[] = [
 	...definePermissions("Reports", "Reports", "reports", ["read", "generate", "export", "*"]),
 
 	// Files
-	...definePermissions("Files", "Files", "files", [
-		"read",
-		"upload",
-		"download",
-		"delete",
-		"*",
-	]),
+	...definePermissions("Files", "Files", "files", ["read", "upload", "download", "delete", "*"]),
 
 	// Notifications
 	...definePermissions("Notifications", "Notifications", "notifications", ["read", "manage", "*"]),

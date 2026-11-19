@@ -168,8 +168,7 @@ export class ProjectsService {
 				title: payload.title ?? row.title,
 				objectives: payload.objectives !== undefined ? payload.objectives : row.objectives,
 				scope: payload.scope !== undefined ? payload.scope : row.scope,
-				deliverables:
-					payload.deliverables !== undefined ? payload.deliverables : row.deliverables,
+				deliverables: payload.deliverables !== undefined ? payload.deliverables : row.deliverables,
 				divisionId: nextDivisionId,
 				updatedAt: new Date(),
 			})

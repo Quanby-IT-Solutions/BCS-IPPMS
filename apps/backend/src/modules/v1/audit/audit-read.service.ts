@@ -1,11 +1,7 @@
 import { Injectable } from "@nestjs/common"
-import { and, desc, eq, gte, lte, count, type SQL } from "drizzle-orm"
+import { and, count, desc, eq, gte, lte, type SQL } from "drizzle-orm"
 
-import {
-	type AuditLog,
-	type ListAuditLogsQuery,
-	type ListAuditLogsResponse,
-} from "@repo/contracts"
+import { type AuditLog, type ListAuditLogsQuery, type ListAuditLogsResponse } from "@repo/contracts"
 import { auditLogs } from "@repo/db/schema"
 
 import { db } from "@/common/database/database.client"

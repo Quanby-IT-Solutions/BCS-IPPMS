@@ -77,8 +77,7 @@ export class DivisionsService {
 			.update(divisions)
 			.set({
 				name: payload.name ?? current.name,
-				description:
-					payload.description !== undefined ? payload.description : current.description,
+				description: payload.description !== undefined ? payload.description : current.description,
 				isActive: nextActive,
 				updatedAt: new Date(),
 			})

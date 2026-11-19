@@ -1,9 +1,6 @@
 import { oc } from "@orpc/contract"
 
-import {
-	ListAuditLogsQuerySchema,
-	ListAuditLogsResponseSchema,
-} from "./audit.schema.js"
+import { ListAuditLogsQuerySchema, ListAuditLogsResponseSchema } from "./audit.schema.js"
 
 /**
  * Audit log read contract. Listing requires `audit:read`. CSV export

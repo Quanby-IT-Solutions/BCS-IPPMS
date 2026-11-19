@@ -147,10 +147,7 @@ export class ApprovalWorkflowsService {
 				.select({ id: approvalRequests.id })
 				.from(approvalRequests)
 				.where(
-					and(
-						eq(approvalRequests.workflowId, current.id),
-						eq(approvalRequests.status, "pending")
-					)
+					and(eq(approvalRequests.workflowId, current.id), eq(approvalRequests.status, "pending"))
 				)
 			if (pending) {
 				throw new ORPCError("CONFLICT", {
@@ -207,9 +204,7 @@ export class ApprovalWorkflowsService {
 		const [pending] = await db
 			.select({ id: approvalRequests.id })
 			.from(approvalRequests)
-			.where(
-				and(eq(approvalRequests.workflowId, id), eq(approvalRequests.status, "pending"))
-			)
+			.where(and(eq(approvalRequests.workflowId, id), eq(approvalRequests.status, "pending")))
 		if (pending) {
 			throw new ORPCError("CONFLICT", {
 				message: "Cannot delete a workflow with pending approval requests",
@@ -295,7 +290,10 @@ export class ApprovalWorkflowsService {
 	}
 
 	private async assertDivisionExists(divisionId: number): Promise<void> {
-		const [row] = await db.select({ id: divisions.id }).from(divisions).where(eq(divisions.id, divisionId))
+		const [row] = await db
+			.select({ id: divisions.id })
+			.from(divisions)
+			.where(eq(divisions.id, divisionId))
 		if (!row) {
 			throw new ORPCError("NOT_FOUND", { message: `Division ${divisionId} not found` })
 		}

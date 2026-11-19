@@ -154,12 +154,7 @@ export class ReportsService {
 		const where = conditions.length ? and(...conditions) : undefined
 
 		const [rows, totalRows, byStatus] = await Promise.all([
-			db
-				.select()
-				.from(projects)
-				.where(where)
-				.orderBy(desc(projects.createdAt))
-				.limit(rowCap),
+			db.select().from(projects).where(where).orderBy(desc(projects.createdAt)).limit(rowCap),
 			db
 				.select({ value: count() })
 				.from(projects)
@@ -277,12 +272,7 @@ export class ReportsService {
 		const where = conditions.length ? and(...conditions) : undefined
 
 		const [rows, totalRows, byModule] = await Promise.all([
-			db
-				.select()
-				.from(auditLogs)
-				.where(where)
-				.orderBy(desc(auditLogs.createdAt))
-				.limit(rowCap),
+			db.select().from(auditLogs).where(where).orderBy(desc(auditLogs.createdAt)).limit(rowCap),
 			db
 				.select({ value: count() })
 				.from(auditLogs)

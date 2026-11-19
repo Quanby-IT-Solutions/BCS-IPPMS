@@ -10,8 +10,8 @@ import type { PermissionName, Role } from "@repo/contracts"
 import { Button } from "@/core/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/core/components/ui/field"
 import { Input } from "@/core/components/ui/input"
-import { PermissionMatrix } from "@/features/roles/components/permission-matrix"
 import { useRateLimitToast } from "@/core/hooks/use-rate-limit-toast"
+import { PermissionMatrix } from "@/features/roles/components/permission-matrix"
 import {
 	useCreateRoleMutation,
 	useRolesQuery,

@@ -23,8 +23,8 @@ import { PasswordInput } from "@/features/auth/components/password-input"
 import { RateLimitBanner } from "@/features/auth/components/rate-limit-banner"
 import { SocialLoginButtons } from "@/features/auth/components/social-login-buttons"
 import { TermsPrivacyNote } from "@/features/auth/components/terms-privacy-note"
-import { env } from "@/env"
 import { ResendVerificationForm } from "@/features/auth/verify-email/components/resend-verification-form"
+import { env } from "@/env"
 
 import { UnverifiedEmailError, useLoginMutation } from "../api/login.hooks"
 import { LoginSchema } from "../api/login.schema"
@@ -108,7 +108,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 								<div
 									role="alert"
 									data-testid="login-unverified-error"
-									className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 rounded-xl border p-3.5 text-xs font-medium flex flex-col items-start gap-1"
+									className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 flex flex-col items-start gap-1 rounded-xl border p-3.5 text-xs font-medium"
 								>
 									<span>Please verify your email before signing in.</span>
 									<Button
@@ -127,7 +127,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 							)}
 
 							{isError && !isUnverified && !rateLimit.isRateLimit && (
-								<div role="alert" data-testid="login-error" className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 rounded-xl border p-3.5 text-xs font-medium">
+								<div
+									role="alert"
+									data-testid="login-error"
+									className="bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/20 rounded-xl border p-3.5 text-xs font-medium"
+								>
 									{error instanceof Error ? error.message : "An unexpected error occurred"}
 								</div>
 							)}

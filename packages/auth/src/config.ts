@@ -18,6 +18,8 @@ import { buildResetPasswordEmail } from "./mailer/templates/reset-password-email
 import { buildVerificationEmail } from "./mailer/templates/verification-email.js"
 import { createTransport } from "./mailer/transport-factory.js"
 import { parseOriginList } from "./origin-list.js"
+import { passwordPolicyHook } from "./password-policy-guard.js"
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.js"
 import { rateLimitStorage } from "./rate-limit-storage.js"
 import { withSafeDatabaseErrors } from "./safe-database-errors.js"
 import { authSecretSchema } from "./secret-schema.js"
@@ -275,6 +277,12 @@ export function createAuth() {
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: verificationRequired,
+			// Stated rather than inherited. Better Auth defaults to 8/128; the
+			// policy raises the floor and these two values are what its own
+			// length assertions read, so the length rule is enforced by the
+			// library and the composition rules by `hooks.before` below.
+			minPasswordLength: PASSWORD_MIN_LENGTH,
+			maxPasswordLength: PASSWORD_MAX_LENGTH,
 			/**
 			 * Send a password-reset link.
 			 *
@@ -434,6 +442,17 @@ export function createAuth() {
 		 * `spec.json` — so the two cannot disagree.
 		 */
 		plugins: buildAuthPlugins(isApiDocsEnabled(process.env.NODE_ENV, authEnv.ENABLE_API_DOCS)),
+		/**
+		 * Password policy enforcement (Technical Requirements, item 19).
+		 *
+		 * Composition rules run before the request reaches the endpoint, so
+		 * sign-up, reset, change and set-password are all covered by one gate
+		 * rather than four call sites that can drift. Length is enforced by
+		 * Better Auth itself from the two bounds set on `emailAndPassword`.
+		 */
+		hooks: {
+			before: passwordPolicyHook(),
+		},
 	})
 }
 

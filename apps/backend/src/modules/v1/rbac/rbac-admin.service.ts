@@ -1,8 +1,9 @@
-import { randomBytes, randomUUID, scryptSync } from "node:crypto"
 import { Injectable } from "@nestjs/common"
+import { randomBytes, randomUUID, scryptSync } from "node:crypto"
 import { ORPCError } from "@orpc/server"
 import { eq, inArray, sql } from "drizzle-orm"
 
+import { generateCompliantPassword, validatePassword } from "@repo/auth/password-policy"
 import {
 	ADMIN_ROLE,
 	getPermissionMeta,
@@ -365,7 +366,10 @@ export class RbacAdminService {
 	 * generated (invite-style); its plaintext is never returned or logged, so
 	 * delivery/reset is handled out-of-band (notifications / T9).
 	 */
-	async createUser(payload: CreateUserInput, actorId: string | null = null): Promise<UserWithRoles> {
+	async createUser(
+		payload: CreateUserInput,
+		actorId: string | null = null
+	): Promise<UserWithRoles> {
 		const email = payload.email.trim().toLowerCase()
 
 		const [existing] = await db.select().from(users).where(eq(users.email, email))
@@ -398,8 +402,34 @@ export class RbacAdminService {
 		}
 
 		const userId = randomUUID()
-		// Invite-style: synthesize a strong random temporary password when omitted.
-		const plaintext = payload.password ?? randomBytes(24).toString("base64url")
+
+		// This path writes the credential row itself rather than going through
+		// Better Auth, so the `hooks.before` policy gate never sees it. Validate
+		// here or an administrator could mint a credential the sign-in flow and
+		// the password-reset flow would both refuse.
+		if (payload.password !== undefined) {
+			const policy = validatePassword(payload.password, { email, name: payload.name })
+			if (!policy.ok) {
+				await this.auditService.record({
+					actorId,
+					action: "user.created",
+					module: AUDIT_MODULE,
+					outcome: "denied",
+					entityType: "user",
+					entityId: email,
+					reason: "Password does not meet the policy",
+					metadata: { failedRules: policy.failedRuleIds },
+				})
+				throw new ORPCError("BAD_REQUEST", {
+					message: policy.message ?? "Password does not meet the policy.",
+				})
+			}
+		}
+
+		// Invite-style: synthesize a temporary password when omitted. Generated
+		// to satisfy the policy by construction, so the holder is never issued a
+		// credential that the policy would reject on their first change.
+		const plaintext = payload.password ?? generateCompliantPassword()
 		const hashedPassword = this.hashPassword(plaintext)
 		const now = new Date()
 		const divisionId = payload.divisionId ?? null
@@ -455,7 +485,10 @@ export class RbacAdminService {
 	}
 
 	/** Update a user's profile (name / email). */
-	async updateUser(payload: UpdateUserRequest, actorId: string | null = null): Promise<UserWithRoles> {
+	async updateUser(
+		payload: UpdateUserRequest,
+		actorId: string | null = null
+	): Promise<UserWithRoles> {
 		const user = await this.getUserRowOrThrow(payload.userId)
 
 		const nextEmail = payload.email !== undefined ? payload.email.trim().toLowerCase() : undefined

@@ -31,8 +31,8 @@ import {
 	EmptyTitle,
 } from "@/core/components/ui/empty"
 import { Skeleton } from "@/core/components/ui/skeleton"
-import { useApprovalInboxQuery } from "@/features/approvals/api/approvals.hooks"
 import { useIsQueryLoading } from "@/services/tanstack-query/use-query-loading"
+import { useApprovalInboxQuery } from "@/features/approvals/api/approvals.hooks"
 import { canAccess, type AccessProfile } from "@/features/dashboard/lib/access"
 import { getAccessibleNavItems } from "@/features/dashboard/lib/nav-items"
 import { useRolesQuery, useUsersQuery } from "@/features/user-management/api/rbac.hooks"
